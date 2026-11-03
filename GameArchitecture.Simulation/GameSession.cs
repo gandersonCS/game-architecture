@@ -75,13 +75,15 @@ public sealed class GameSession : ISimulation
 
         World.Track.Advance(dt);
         var runnerInput = new RunnerInput(jumpPressed, jumpDown);
-        bool restart = World.Runner.Update(runnerInput, World.Track, dt, Events, context.Tick);
+        bool wantsContinue = World.Runner.Update(runnerInput, World.Track, dt, Events, context.Tick);
 
         // do this after the runner moves so he picks up what he actually went through
         World.Essence.Update(World.Track, World.Runner, Events, context.Tick);
 
-        if (restart)
-            World.Restart();
+        // pressing jump after dying picks the run back up where it ended (if there are continues
+        // left - the game only lets the press through if the player can afford it)
+        if (wantsContinue)
+            World.Continue(Events, context.Tick);
 
         TickCount = context.Tick + 1;
     }

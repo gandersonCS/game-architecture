@@ -77,7 +77,8 @@ public sealed class Runner
 
     /// <summary>Fraction of upward speed kept on release, otherwise he rockets off the top of the screen</summary>
     public const float ReleaseUpFraction = 0.4f;
-    public const float RestartDelaySeconds = 0.8f;
+    /// <summary>How long after dying before a button press counts as "continue"</summary>
+    public const float ContinueDelaySeconds = 0.8f;
 
     // spots on his body we check for roofs - slightly behind and slightly in front of center
     private const float FootBack = 10f;
@@ -140,7 +141,8 @@ public sealed class Runner
     }
 
     /// <summary>
-    /// Steps the runner forward one tick. Returns true when the player wants to restart.
+    /// Steps the runner forward one tick. Returns true when he's dead and the player pressed the
+    /// button to continue (the world decides whether they're allowed to).
     /// </summary>
     public bool Update(in RunnerInput input, RooftopTrack track, float dt, EventQueue<GameEvent> events, long tick)
     {
@@ -153,11 +155,11 @@ public sealed class Runner
 
         if (State == RunnerState.Dead)
         {
-            // fall off screen, then wait for a button press to restart
+            // fall off screen, then wait for a button press to continue
             _deadSeconds += dt;
             VelocityY += Gravity * dt;
             FeetY += VelocityY * dt;
-            return input.JumpPressed && _deadSeconds >= RestartDelaySeconds;
+            return input.JumpPressed && _deadSeconds >= ContinueDelaySeconds;
         }
 
         switch (State)
@@ -274,6 +276,27 @@ public sealed class Runner
         // done once he's swung round to the mirror of his starting angle, or he's basically stopped
         if (_theta >= _endTheta || _omega <= 0.05f)
             ReleaseWeb(track);
+    }
+
+    /// <summary>
+    /// Brings him back after a death: standing on the roof at his spot on the track (the track
+    /// has just moved to a safe one, see <see cref="RooftopTrack.Resume"/>)
+    /// </summary>
+    internal void Revive(RooftopTrack track)
+    {
+        State = RunnerState.Running;
+        EndReason = null;
+        Anchor = null;
+        FeetY = track.GroundYAt(track.RunnerTrackX);
+        VelocityY = 0;
+        AirSeconds = 0;
+        SwingSeconds = 0;
+        _deadSeconds = 0;
+        _jumpBuffer = 0;        // the press that continued shouldn't also make him jump
+        _coyoteSeconds = 0;
+        _canCoyote = false;
+        _jumpHeld = false;
+        _webLocked = true;      // ...or swing, if they're still holding the button
     }
 
     private void Jump()

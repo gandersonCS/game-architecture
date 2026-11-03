@@ -13,7 +13,8 @@ public enum TimeOfDay { Day, Dusk, Night }
 /// The parallax city behind the rooftops. It has a full set of layers for each
 /// <see cref="TimeOfDay"/> and cycles Day -> Dusk -> Night -> Day every
 /// <see cref="MetersPerPeriod"/>, cross-fading over the last <see cref="FadeMeters"/> before each
-/// change.
+/// change. A new game starts at a random point in the cycle (<see cref="RandomizeStart"/>), and
+/// retrying after dying picks up where the last run left off (<see cref="ContinueFrom"/>).
 /// </summary>
 /// <remarks>
 /// Each set is a stack of 576x324 layers, drawn back (sky) to front (closest buildings). Layers
@@ -48,6 +49,38 @@ public sealed class CityBackdrop
     private static readonly TimeOfDay[] Cycle = { TimeOfDay.Day, TimeOfDay.Dusk, TimeOfDay.Night };
 
     private readonly LayerSet[] _sets = new LayerSet[Cycle.Length];
+    private readonly Random _random = new();
+
+    /// <summary>
+    /// The time of day at the start of a run. The cycle goes on in the usual order from here.
+    /// </summary>
+    public TimeOfDay Start { get; set; } = TimeOfDay.Day;
+
+    /// <summary>
+    /// Picks a random <see cref="Start"/> (call when a new run begins)
+    /// </summary>
+    /// <remarks>
+    /// This is purely cosmetic, so it uses its own Random instead of the simulation's
+    /// DeterministicRandom (pulling from that one would change the level layout).
+    /// </remarks>
+    public void RandomizeStart() => Start = Cycle[_random.Next(Cycle.Length)];
+
+    /// <summary>
+    /// Makes the next run start on whatever time of day was showing at the end of the last one
+    /// (used when retrying right after dying, so the sky doesn't suddenly jump)
+    /// </summary>
+    /// <param name="meters">How far the last run got</param>
+    public void ContinueFrom(double meters) => Start = ShowingAt(meters);
+
+    /// <summary>
+    /// The time of day that's mostly showing at a distance (if it's in the middle of a fade,
+    /// whichever one is more visible)
+    /// </summary>
+    public TimeOfDay ShowingAt(double meters)
+    {
+        float fade = PeriodAt(meters, Start, out var current, out var next);
+        return fade >= 0.5f ? next : current;
+    }
 
     /// <summary>
     /// Loads all of the layer textures
@@ -81,18 +114,20 @@ public sealed class CityBackdrop
     /// Works out which time of day it is at a distance
     /// </summary>
     /// <param name="meters">Distance run</param>
+    /// <param name="start">The time of day the run started at</param>
     /// <param name="current">The time of day that's showing</param>
     /// <param name="next">The time of day that's coming next</param>
     /// <returns>How far into the fade to <paramref name="next"/> it is (0 = not fading yet, 1 = done)</returns>
-    public static float PeriodAt(double meters, out TimeOfDay current, out TimeOfDay next)
+    public static float PeriodAt(double meters, TimeOfDay start, out TimeOfDay current, out TimeOfDay next)
     {
         meters = Math.Max(0, meters);
-        int period = (int)(meters / MetersPerPeriod);
+        int periodsRun = (int)(meters / MetersPerPeriod);
+        int period = periodsRun + Array.IndexOf(Cycle, start);
         current = Cycle[period % Cycle.Length];
         next = Cycle[(period + 1) % Cycle.Length];
 
         // fade happens at the end of the period, so the switch is finished right at the 500 m mark
-        double intoPeriod = meters - period * MetersPerPeriod;
+        double intoPeriod = meters - periodsRun * MetersPerPeriod;
         double fadeStart = MetersPerPeriod - FadeMeters;
         float fade = (float)Math.Clamp((intoPeriod - fadeStart) / FadeMeters, 0, 1);
 
@@ -106,7 +141,7 @@ public sealed class CityBackdrop
     /// </summary>
     public Color FillColor(double meters)
     {
-        float fade = PeriodAt(meters, out var current, out var next);
+        float fade = PeriodAt(meters, Start, out var current, out var next);
         return Color.Lerp(_sets[(int)current].Fill, _sets[(int)next].Fill, fade);
     }
 
@@ -120,7 +155,7 @@ public sealed class CityBackdrop
     /// <param name="right">Right edge of the visible area</param>
     public void Draw(SpriteBatch spriteBatch, double scrollX, double meters, float left, float right)
     {
-        float fade = PeriodAt(meters, out var current, out var next);
+        float fade = PeriodAt(meters, Start, out var current, out var next);
 
         // draw the current set, then the next one on top of it, see-through by how far the fade is.
         // (textures are premultiplied, so Color.White * fade fades the whole layer)

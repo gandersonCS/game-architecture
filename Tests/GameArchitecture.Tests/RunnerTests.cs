@@ -1,4 +1,5 @@
 using System;
+using System.Linq;
 using System.Numerics;
 using CIS580.Simulation;
 using GameArchitecture.Simulation;
@@ -110,29 +111,84 @@ public class RunnerTests
         Assert.Equal(scroll, session.World.Track.ScrollX);
     }
 
-    [Fact]
-    public void PressingJumpAfterTheRunEnds_StartsANewRun()
+    // does nothing until the run ends, then presses jump (down, up, down, up...) to ask for a continue
+    private static (GameSession session, SessionRunner runner) StartAndSpamJumpWhenDead()
     {
-        // do nothing until the run ends, then spam jump (down, up, down, up...)
         GameSession session = null;
         var (s, runner) = Start(1, tick =>
             session?.World.Runner.State == RunnerState.Dead && tick % 2 == 0
                 ? Holding(GameAction.Jump)
                 : default);
         session = s;
+        return (session, runner);
+    }
 
-        bool died = false, restarted = false;
-        for (int i = 0; i < 60 * 120 && !restarted; i++)
+    [Fact]
+    public void PressingJumpAfterTheRunEnds_ContinuesWhereYouDied()
+    {
+        var (session, runner) = StartAndSpamJumpWhenDead();
+
+        double distanceAtDeath = 0;
+        int essenceAtDeath = 0;
+        bool died = false;
+        for (int i = 0; i < 60 * 120 && session.World.ContinuesUsed == 0; i++)
         {
             runner.Step();
-            if (session.World.Runner.State == RunnerState.Dead)
+            if (!died && session.World.Runner.State == RunnerState.Dead)
+            {
                 died = true;
-            else if (died)
-                restarted = true;
+                distanceAtDeath = session.World.Track.DistanceMeters;
+                essenceAtDeath = session.World.Essence.CollectedThisRun;
+            }
         }
 
-        Assert.True(restarted, "Pressing jump should start a new run");
-        Assert.True(session.World.Track.ScrollX < 100, "The new run starts from the beginning");
+        Assert.True(died);
+        Assert.Equal(1, session.World.ContinuesUsed);
+        Assert.Equal(RunnerState.Running, session.World.Runner.State);
+        Assert.True(session.World.Track.IsScrolling);
+        Assert.Equal(distanceAtDeath, session.World.Track.DistanceMeters, 6);     // same score
+        Assert.Equal(essenceAtDeath, session.World.Essence.CollectedThisRun);     // same essence
+        Assert.NotNull(session.World.Track.RoofAt(session.World.Track.RunnerTrackX));   // standing on a roof
+        Assert.Contains(session.Events.Pending, e => e is RunContinued);
+    }
+
+    [Fact]
+    public void ContinueCosts_Start500_AndGoUp100EachTime_ForAtMostFourContinues()
+    {
+        var (session, runner) = StartAndSpamJumpWhenDead();
+
+        // keep dying and continuing; once the continues run out, keep going a while longer to
+        // check it really stays over
+        int ticksSinceLast = 0;
+        int lastCount = 0;
+        for (int i = 0; i < 60 * 600 && ticksSinceLast < 60 * 10; i++)
+        {
+            runner.Step();
+            if (session.World.ContinuesUsed != lastCount)
+            {
+                lastCount = session.World.ContinuesUsed;
+                ticksSinceLast = 0;
+            }
+            else
+                ticksSinceLast++;
+        }
+
+        var costs = session.Events.Pending.OfType<RunContinued>().Select(c => c.Cost).ToArray();
+        Assert.Equal(new[] { 500, 600, 700, 800 }, costs);
+        Assert.Equal(World.MaxContinues, session.World.ContinuesUsed);
+        Assert.Equal(RunnerState.Dead, session.World.Runner.State);    // no more chances
+        Assert.False(session.World.CanContinue);
+    }
+
+    [Fact]
+    public void ANewWorld_StartsWithFullContinues()
+    {
+        var world = new World(1);
+
+        Assert.Equal(0, world.ContinuesUsed);
+        Assert.Equal(World.MaxContinues, world.ContinuesLeft);
+        Assert.Equal(500, world.NextContinueCost);
+        Assert.False(world.CanContinue);       // he's alive
     }
 
     [Fact]

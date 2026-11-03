@@ -69,7 +69,12 @@ public sealed class SaveFile
     /// Records a finished run - updates last score, high score if it's a record, adds the essence -
     /// and then saves.
     /// </summary>
-    public RunRecord RecordRun(double meters, int essence)
+    /// <param name="meters">Distance reached</param>
+    /// <param name="essence">Essence to add to the total. After a continue this is just what was
+    /// collected since the last time the run was recorded, so nothing is counted twice</param>
+    /// <param name="countsAsRun">False when this is the same run being recorded again (it died,
+    /// continued, and died again), so it doesn't count as another run played</param>
+    public RunRecord RecordRun(double meters, int essence, bool countsAsRun = true)
     {
         // round it the same way the HUD does so the saved score matches what the player saw
         int score = (int)Math.Round(Math.Max(0, meters));
@@ -78,7 +83,8 @@ public sealed class SaveFile
         Data.LastScoreMeters = score;
         if (newBest)
             Data.HighScoreMeters = score;
-        Data.RunsPlayed++;
+        if (countsAsRun)
+            Data.RunsPlayed++;
         Data.SpiderEssence = AddClamped(Data.SpiderEssence, Math.Max(0, essence));
 
         bool saved = Save();

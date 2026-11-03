@@ -69,6 +69,14 @@ public class Builder : ContentBuilder
         foreach (var track in tracks)
             content.Include($"Audio/Music/{track}.mp3", new Mp3Importer(), new SoundEffectProcessor());
 
+        // mp3 sound effects, built as SoundEffects the same way as the mp3 music above
+        string[] mp3Sfx =
+        {
+            "spiderman-screaming-no",               // sometimes plays when he dies
+        };
+        foreach (var sfx in mp3Sfx)
+            content.Include($"Audio/Sfx/{sfx}.mp3", new Mp3Importer(), new SoundEffectProcessor());
+
         // songs with an intro that plays once before looping (see LoopingTrack). these are 16-bit
         // wavs that get copied as-is, since the game reads the samples itself to loop seamlessly.
         // loop points are set in GameAudio.

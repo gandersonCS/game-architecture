@@ -52,9 +52,20 @@ public enum RunEndReason { Fell, HitWall }
 public sealed record RunEnded(long Tick, double DistanceMeters, RunEndReason Reason) : GameEvent(Tick);
 
 /// <summary>
+/// The player continued after dying and picked the run back up. The game takes <paramref name="Cost"/>
+/// out of the player's total Spider-Essence when it sees this.
+/// </summary>
+/// <param name="ContinuesUsed">How many continues this run has used, including this one</param>
+/// <param name="Cost">Spider-Essence this continue costs</param>
+/// <param name="DistanceMeters">Distance when he died (it carries on from here)</param>
+public sealed record RunContinued(long Tick, int ContinuesUsed, int Cost, double DistanceMeters) : GameEvent(Tick);
+
+/// <summary>
 /// Fired when he grabs a Spider-Essence orb
 /// </summary>
 /// <param name="X">Orb's x along the track</param>
 /// <param name="Y">Orb's y from the top of the screen</param>
 /// <param name="CollectedThisRun">Total collected this run, including this one</param>
-public sealed record EssenceCollected(long Tick, double X, float Y, int CollectedThisRun) : GameEvent(Tick);
+/// <param name="Pack">Which pack the orb came from (see <see cref="EssenceOrb.Pack"/>), so audio can tell a
+/// streak through one pack from a new pack</param>
+public sealed record EssenceCollected(long Tick, double X, float Y, int CollectedThisRun, int Pack) : GameEvent(Tick);

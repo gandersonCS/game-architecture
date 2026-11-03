@@ -30,6 +30,29 @@ public sealed class GameAudio
     private int _lastRunTrack = -1;
     private readonly SoundCue _playerJoined;
     private readonly SoundCue _playerLeft;
+    private readonly SoundCue _jump;
+    private readonly SoundCue _webShoot;
+    private readonly SoundCue _airDash;
+    private readonly SoundCue _essence;
+    private readonly SoundCue _deathHit;
+    private readonly SoundCue _deathScream;
+
+    // Spider-Essence pickups climb in pitch while you grab a pack in one go
+    private int _essenceStreak;
+    private int _essencePack = -1;
+    private TimeSpan _lastEssenceTime;
+
+    /// <summary>Each pickup in a streak is this much higher than the last (in octaves: 1/12 is a semitone)</summary>
+    private const float EssencePitchStep = 1f / 12f;
+
+    /// <summary>The highest the pickup pitch goes (in octaves)</summary>
+    private const float EssenceMaxPitch = 0.75f;
+
+    /// <summary>A gap longer than this between pickups starts the climb over, even in the same pack</summary>
+    private static readonly TimeSpan EssenceStreakWindow = TimeSpan.FromSeconds(0.5);
+
+    /// <summary>The chance the "no!" scream plays on top of the hit when he dies</summary>
+    private const double ScreamChance = 1.0 / 8.0;
 
     /// <param name="audio">The audio manager</param>
     /// <param name="content">Loads the sounds; they stay loaded while the game runs</param>
@@ -50,6 +73,41 @@ public sealed class GameAudio
             PitchVariation = 0.05f,
         };
         _playerLeft = new SoundCue(audio.Effects, content.Load<SoundEffect>("Audio/Sfx/player_leave"));
+
+        _jump = new SoundCue(audio.Effects, content.Load<SoundEffect>("Audio/Sfx/Jump"))
+        {
+            PitchVariation = 0.04f,
+            VolumeVariation = 0.1f,
+        };
+
+        // the web shot picks one of these at random each time (never the same one twice in a row)
+        _webShoot = new SoundCue(audio.Effects,
+            content.Load<SoundEffect>("Audio/Sfx/WebShoot1"),
+            content.Load<SoundEffect>("Audio/Sfx/WetSplat"))
+        {
+            PitchVariation = 0.05f,
+            VolumeVariation = 0.1f,
+        };
+
+        // the whoosh when he lets go of the web and flies through the air
+        _airDash = new SoundCue(audio.Effects, content.Load<SoundEffect>("Audio/Sfx/AirDash"))
+        {
+            PitchVariation = 0.05f,
+            MaxInstances = 2,
+        };
+
+        // no random pitch here: the streak sets the pitch so the climb sounds like a clean scale
+        _essence = new SoundCue(audio.Effects, content.Load<SoundEffect>("Audio/Sfx/Pickup4"))
+        {
+            MaxInstances = 8,
+            Volume = 0.8f,
+        };
+
+        _deathHit = new SoundCue(audio.Effects, content.Load<SoundEffect>("Audio/Sfx/Hit"));
+        _deathScream = new SoundCue(audio.Effects, content.Load<SoundEffect>("Audio/Sfx/spiderman-screaming-no"))
+        {
+            MaxInstances = 1,
+        };
     }
 
     /// <summary>
@@ -138,7 +196,43 @@ public sealed class GameAudio
             case PlayerLeft:
                 _playerLeft.Play();
                 break;
+            case RunnerJumped:
+                _jump.Play();
+                break;
+            case WebAttached:
+                _webShoot.Play();
+                break;
+            case WebReleased:
+                _airDash.Play();
+                break;
+            case EssenceCollected collected:
+                PlayEssence(collected);
+                break;
+            case RunEnded:
+                _deathHit.Play();
+                if (_random.NextDouble() < ScreamChance)
+                    _deathScream.Play();
+                break;
         }
+    }
+
+    /// <summary>
+    /// Plays the essence pickup, a semitone higher for each orb grabbed in a row from the same
+    /// pack. A new pack, or a pause between pickups, starts back at the normal pitch.
+    /// </summary>
+    private void PlayEssence(EssenceCollected collected)
+    {
+        TimeSpan now = Audio.Now;
+        bool continuesStreak = collected.Pack == _essencePack
+            && _essenceStreak > 0
+            && now - _lastEssenceTime <= EssenceStreakWindow;
+
+        _essenceStreak = continuesStreak ? _essenceStreak + 1 : 1;
+        _essencePack = collected.Pack;
+        _lastEssenceTime = now;
+
+        float pitch = MathF.Min((_essenceStreak - 1) * EssencePitchStep, EssenceMaxPitch);
+        _essence.Play(pitch: pitch);
     }
 
     /// <summary>

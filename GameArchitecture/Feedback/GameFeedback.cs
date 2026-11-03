@@ -62,6 +62,12 @@ public sealed class GameFeedback
                 foreach (var local in _players)
                     _rumble.Play(local, 0.8f, 0.4f, TimeSpan.FromMilliseconds(250));
                 break;
+            case RunContinued:
+                // back in action
+                _world.Shake(0.2f);
+                foreach (var local in _players)
+                    _rumble.Play(local, 0.3f, 0.6f, TimeSpan.FromMilliseconds(150));
+                break;
             case RunnerLanded landed when landed.FallSpeed > 700f:
                 // hard landing
                 _world.Shake(0.15f);

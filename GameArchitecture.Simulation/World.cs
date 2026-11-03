@@ -60,6 +60,27 @@ public sealed class World
     /// </summary>
     public EssenceField Essence { get; private set; }
 
+    /// <summary>Most continues a single run can use</summary>
+    public const int MaxContinues = 4;
+
+    /// <summary>What the first continue of a run costs, in Spider-Essence</summary>
+    public const int FirstContinueCost = 500;
+
+    /// <summary>How much more each continue in the same run costs than the one before</summary>
+    public const int ContinueCostStep = 100;
+
+    /// <summary>Continues used so far this run</summary>
+    public int ContinuesUsed { get; private set; }
+
+    /// <summary>Continues left this run</summary>
+    public int ContinuesLeft => MaxContinues - ContinuesUsed;
+
+    /// <summary>What the next continue costs (500, 600, 700, 800)</summary>
+    public int NextContinueCost => FirstContinueCost + ContinueCostStep * ContinuesUsed;
+
+    /// <summary>True if he's dead and the run still has continues left (the player may not be able to afford one)</summary>
+    public bool CanContinue => Runner.State == RunnerState.Dead && ContinuesUsed < MaxContinues;
+
     public World(ulong seed)
     {
         Random = new DeterministicRandom(seed);
@@ -81,6 +102,26 @@ public sealed class World
         => _players.Find(p => p.Owner == player);
 
     /// <summary>
+    /// Picks the run back up after a death: same city, same distance, same essence collected, with
+    /// him standing on a safe roof. Doesn't check that the player can pay (that's up to the game,
+    /// which has their saved essence) - it just counts the continue and raises
+    /// <see cref="RunContinued"/> so the game can charge for it.
+    /// </summary>
+    internal bool Continue(EventQueue<GameEvent> events, long tick)
+    {
+        if (!CanContinue)
+            return false;
+
+        int cost = NextContinueCost;
+        ContinuesUsed++;
+        Track.Resume();
+        Runner.Revive(Track);
+        Essence.Resume();
+        events.Raise(new RunContinued(tick, ContinuesUsed, cost, Track.DistanceMeters));
+        return true;
+    }
+
+    /// <summary>
     /// Starts a new run with a fresh city and puts Spider-Man back on the first roof. Uses the same
     /// random stream so it's still deterministic
     /// </summary>
@@ -88,6 +129,7 @@ public sealed class World
     {
         Track = new RooftopTrack(Random);
         Runner = new Runner(Track);
+        ContinuesUsed = 0;
         ulong essenceSeed = ((ulong)Random.NextUInt() << 32) | Random.NextUInt();
         Essence = new EssenceField(new DeterministicRandom(essenceSeed ^ EssenceSeedMix));
     }

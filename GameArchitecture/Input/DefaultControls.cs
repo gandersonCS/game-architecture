@@ -20,10 +20,10 @@ public static class DefaultControls
     private static GamePadButtonBinding Button(Buttons button) => new(button);
 
     /// <summary>
-    /// The whole keyboard and mouse, for a player who isn't sharing them
+    /// The whole keyboard, for a player who isn't sharing it. Jump is Space or A (no mouse clicks)
     /// </summary>
     public static ControlScheme Keyboard() => StandardSchemes.Keyboard()
-        .Bind(nameof(GameAction.Jump), Key(Keys.Space), new MouseButtonBinding(MouseButton.Left));
+        .Bind(nameof(GameAction.Jump), Key(Keys.Space), Key(Keys.A));
 
     /// <summary>
     /// The left side of a shared keyboard

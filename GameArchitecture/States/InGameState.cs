@@ -41,7 +41,8 @@ public sealed class InGameState : AppState, ILoadable
     private GameAudio _audio;
     private GameSettings _settings;
     private SaveFile _save;
-    private Runner _recordedRun;       // last run we already saved, so it doesn't get saved twice
+    private int _bankedEssence;        // essence from this run already added to the save, so a continue doesn't count it twice
+    private bool _runCounted;          // this run already counted toward "runs played"
     private readonly Rumble _rumble = new();
     private readonly HitStop _hitStop = new();
 
@@ -119,7 +120,7 @@ public sealed class InGameState : AppState, ILoadable
         ListenTo(Array.Empty<InputSource>());
 
         // The world, with the HUD over it; both react to the simulation's events
-        _worldView = Show(new WorldView(Session, _gameFont, _tileset, _backdrop, _spidey));
+        _worldView = Show(new WorldView(Session, _gameFont, _tileset, _backdrop, _spidey, _save));
         var hud = Show(new HudLayer(_players));
         GameEventRaised += _worldView.OnGameEvent;
         GameEventRaised += hud.OnGameEvent;
@@ -137,25 +138,42 @@ public sealed class InGameState : AppState, ILoadable
 
     private void OnGameEvent(GameEvent gameEvent)
     {
-        if (gameEvent is RunEnded ended)
+        switch (gameEvent)
         {
-            var record = RecordRun(ended.DistanceMeters);
-            if (record is RunRecord saved)
-                _worldView.ShowRunRecord(saved);
+            case RunEnded ended:
+                // bank what they collected (that's also what pays for a continue)
+                if (RecordRun(ended.DistanceMeters) is RunRecord saved)
+                    _worldView.ShowRunRecord(saved with { EssenceCollected = Session.World.Essence.CollectedThisRun });
+                break;
+
+            case RunContinued continued:
+                // pay for it out of the total Spider-Essence in the save
+                _save?.TrySpend(continued.Cost);
+                break;
         }
     }
 
     /// <summary>
-    /// Saves this run's distance + essence (only once per run)
+    /// True if the player can pay for the next continue (they always can if there's no save to charge)
+    /// </summary>
+    private bool CanAffordContinue()
+        => _save == null || _save.Data.SpiderEssence >= Session.World.NextContinueCost;
+
+    /// <summary>
+    /// Saves this run's distance + the essence collected since the last save. After a continue the
+    /// same run gets saved again, so only the new essence is added and it isn't counted as another run.
     /// </summary>
     private RunRecord? RecordRun(double meters)
     {
-        var run = Session?.World.Runner;
-        if (_save == null || run == null || run == _recordedRun)
+        if (_save == null || Session == null)
             return null;
 
-        _recordedRun = run;
-        return _save.RecordRun(meters, Session.World.Essence.CollectedThisRun);
+        int collected = Session.World.Essence.CollectedThisRun;
+        int newEssence = collected - _bankedEssence;
+        bool firstTime = !_runCounted;
+        _bankedEssence = collected;
+        _runCounted = true;
+        return _save.RecordRun(meters, newEssence, countsAsRun: firstTime);
     }
 
     /// <summary>
@@ -207,9 +225,13 @@ public sealed class InGameState : AppState, ILoadable
 
         // Read each player's input before running the simulation, so it responds immediately.
         // Players using a menu (e.g. the pause menu, if it doesn't stop the simulation) stand still.
+        // After dying, pressing jump continues - but only if they can pay for it, so otherwise
+        // the press is ignored (the screen tells them to press Esc for the menu)
+        var world = Session.World;
+        bool jumpIgnored = world.Runner.State == RunnerState.Dead && !(world.CanContinue && CanAffordContinue());
         foreach (var player in _players)
         {
-            if (IsTop || !Ui.Sources.Contains(player.Input))
+            if (!jumpIgnored && (IsTop || !Ui.Sources.Contains(player.Input)))
                 player.SubmitCommand<GameAction>(Input);
             else
                 player.SubmitIdle();
@@ -234,9 +256,11 @@ public sealed class InGameState : AppState, ILoadable
     {
         foreach (var player in _players)
         {
-            if (player.Input.WasPressed(StandardControls.Pause, Input) && _pausePolicy.CanPause(player, _players))
+            // Esc (or Start on a gamepad) goes straight back to the main menu - no pause menu.
+            // Exit() saves the essence they collected so far
+            if (player.Input.WasPressed(StandardControls.Pause, Input))
             {
-                Flow.Push(new PausedState(this, player));
+                Flow.Change(new MainMenuState());
                 return;
             }
 

@@ -113,6 +113,12 @@ public sealed class EssenceField
         Discard(track);
     }
 
+    /// <summary>
+    /// A continue moves the runner to a new spot, so forget where he was last tick. Otherwise the
+    /// pickup box would stretch across the jump and grab orbs he never went near.
+    /// </summary>
+    internal void Resume() => _hasLast = false;
+
     private void Generate(RooftopTrack track)
     {
         // wait until the buildings under the whole pack have been generated
@@ -242,7 +248,7 @@ public sealed class EssenceField
 
             _orbs.RemoveAt(i--);
             CollectedThisRun++;
-            events.Raise(new EssenceCollected(tick, orb.X, orb.Y, CollectedThisRun));
+            events.Raise(new EssenceCollected(tick, orb.X, orb.Y, CollectedThisRun, orb.Pack));
         }
 
         _lastRunnerX = x;

@@ -46,6 +46,8 @@ public class WorldView : WorldLayer
     private static readonly Color NewBestColor = new(255, 220, 70);
     private static readonly Color SavedColor = new(150, 235, 160);
     private static readonly Color NotSavedColor = new(255, 140, 130);
+    private static readonly Color CantAffordColor = new(255, 140, 130);
+    private static readonly Color ContinueColor = new(120, 215, 255);
 
     // orb settings in world units: core radius + bob/spin
     private const float OrbRadius = 5f;
@@ -66,9 +68,12 @@ public class WorldView : WorldLayer
     private readonly Texture2D _tileset;
     private readonly CityBackdrop _backdrop;
     private readonly Texture2D _spidey;
+    private readonly SaveFile _save;
     private EssenceArt _essenceArt;
     private RunRecord? _runRecord;
     private Runner _recordedRunner;
+    private Runner _backdropRunner;     // run the backdrop's start was picked for
+    private RooftopTrack _backdropTrack; // that run's track, to see how far it got
     private float _clock;
 
     /// <param name="session">The game to draw</param>
@@ -76,13 +81,22 @@ public class WorldView : WorldLayer
     /// <param name="tileset">Textures/tileset_city_free</param>
     /// <param name="backdrop">The parallax city behind the rooftops (day/dusk/night)</param>
     /// <param name="spidey">Textures/spiderman (sprite sheet with the background removed)</param>
-    public WorldView(GameSession session, SpriteFont font, Texture2D tileset, CityBackdrop backdrop, Texture2D spidey)
+    /// <param name="save">The player's progress, for showing how much Spider-Essence they have toward a continue</param>
+    public WorldView(GameSession session, SpriteFont font, Texture2D tileset, CityBackdrop backdrop, Texture2D spidey,
+        SaveFile save = null)
     {
         _session = session ?? throw new ArgumentNullException(nameof(session));
         _font = font;
         _tileset = tileset;
         _backdrop = backdrop;
         _spidey = spidey;
+        _save = save;
+
+        // a new game (from the menu) starts at a random time of day. retries carry on from where
+        // the last run ended (see Update)
+        _backdrop?.RandomizeStart();
+        _backdropRunner = session.World.Runner;
+        _backdropTrack = session.World.Track;
 
         // fills anything outside the world; follows the time of day (see Update)
         BackgroundColor = backdrop?.FillColor(0) ?? Color.Black;
@@ -122,9 +136,19 @@ public class WorldView : WorldLayer
         _clock = (float)gameTime.TotalGameTime.TotalSeconds;
         _bursts.RemoveAll(b => _clock - b.Start > BurstSeconds);
 
-        // new run started, clear the old summary
-        if (_runRecord != null && _session.World.Runner != _recordedRunner)
+        // new run started (or he continued), clear the old summary
+        if (_runRecord != null &&
+            (_session.World.Runner != _recordedRunner || _session.World.Runner.State != RunnerState.Dead))
             _runRecord = null;
+
+        // retried after dying: the world made a new runner + track, so start the new run on the
+        // time of day the old one ended on (the old track still knows how far it got)
+        if (_backdrop != null && _session.World.Runner != _backdropRunner)
+        {
+            _backdrop.ContinueFrom(_backdropTrack.DistanceMeters);
+            _backdropRunner = _session.World.Runner;
+            _backdropTrack = _session.World.Track;
+        }
 
         if (_backdrop != null)
             BackgroundColor = _backdrop.FillColor(_session.World.Track.DistanceMeters);
@@ -357,8 +381,42 @@ public class WorldView : WorldLayer
             if (_runRecord is RunRecord record)
                 DrawRunSummary(camera, record);
 
-            DrawCentered("Press Jump to try again", new Vector2(World.Width / 2, 350), Color.White * 0.9f, 0.8f);
+            DrawContinuePrompt();
         }
+    }
+
+    /// <summary>
+    /// What you can do after dying: continue (what it costs, whether you can afford it, how many
+    /// are left) or go back to the main menu with Esc
+    /// </summary>
+    private void DrawContinuePrompt()
+    {
+        const float centerX = World.Width / 2;
+        var world = _session.World;
+        int have = _save?.Data.SpiderEssence ?? 0;
+
+        if (!world.CanContinue)
+        {
+            DrawCentered("No continues left this run", new Vector2(centerX, 338), CantAffordColor, 0.7f);
+        }
+        else if (_save != null && have < world.NextContinueCost)
+        {
+            DrawCentered($"Not enough Spider-Essence to continue ({have} / {world.NextContinueCost})",
+                new Vector2(centerX, 338), CantAffordColor, 0.6f);
+        }
+        else
+        {
+            DrawCentered($"SPACE / A: Continue  -  {world.NextContinueCost} Spider-Essence",
+                new Vector2(centerX, 338), ContinueColor, 0.75f);
+        }
+
+        if (world.CanContinue)
+        {
+            DrawCentered($"{world.ContinuesLeft} of {World.MaxContinues} continues left   |   You have {have}",
+                new Vector2(centerX, 372), Color.White * 0.8f, 0.5f);
+        }
+
+        DrawCentered("ESC: Main menu", new Vector2(centerX, 410), Color.White * 0.9f, 0.6f);
     }
 
     /// <summary>

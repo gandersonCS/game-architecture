@@ -98,6 +98,9 @@ public sealed class RooftopTrack
     // drop buildings once they're this far off the left side
     private const double DiscardMargin = 600;
 
+    // a continue puts him at least this many tiles in from both edges of a roof
+    private const int SafeInsetTiles = 3;
+
     // cruising speed (units/sec) and how quickly it ramps up over a run
     public const float BaseSpeed = 360f;
     public const float MaxSpeed = 720f;
@@ -112,6 +115,7 @@ public sealed class RooftopTrack
     private readonly List<Building> _buildings = new();
     private int _nextColumn;
     private double _elapsed;
+    private double _distanceOffset;     // keeps the score the same when a continue moves the runner ahead
 
     public RooftopTrack(DeterministicRandom random)
     {
@@ -140,7 +144,7 @@ public sealed class RooftopTrack
     public float Speed { get; private set; } = BaseSpeed;
 
     /// <summary>Distance run in meters (1 tile = 1 meter)</summary>
-    public double DistanceMeters => ScrollX / TileSize;
+    public double DistanceMeters => (ScrollX + _distanceOffset) / TileSize;
 
     /// <summary>Set to false when the run ends so the city stops</summary>
     public bool IsScrolling { get; internal set; } = true;
@@ -159,6 +163,39 @@ public sealed class RooftopTrack
     {
         ScrollX = scrollX;
         Speed = speed;
+    }
+
+    /// <summary>
+    /// Used by a continue: puts the runner on the nearest roof that's safe to start from (at his
+    /// current spot if there's roof there, otherwise the next building ahead) and starts the city
+    /// scrolling again at cruising speed. Moving the scroll doesn't change <see cref="DistanceMeters"/>,
+    /// so the score stays exactly what it was when he died.
+    /// </summary>
+    internal void Resume()
+    {
+        double here = RunnerTrackX;
+        double target = here;
+        foreach (var building in _buildings)
+        {
+            double inset = building.StartColumn * (double)TileSize + SafeInsetTiles * TileSize;
+            double last = building.EndColumn * (double)TileSize - SafeInsetTiles * TileSize;
+            double spawn = Math.Max(here, inset);
+            if (spawn <= last)
+            {
+                target = spawn;
+                break;
+            }
+        }
+
+        double newScroll = target - RunnerX;
+        _distanceOffset -= newScroll - ScrollX;     // same score, different spot on the map
+        ScrollX = newScroll;
+
+        Speed = CruiseSpeed;
+        ScrollDrivenByRunner = false;
+        IsScrolling = true;
+        Generate();
+        Discard();
     }
 
     /// <summary>
