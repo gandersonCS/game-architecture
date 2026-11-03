@@ -9,7 +9,7 @@ using GameArchitecture.Simulation;
 namespace GameArchitecture.Views;
 
 /// <summary>
-/// Draws everything in the runner: parallax skyline, the scrolling tile rooftops, essence orbs,
+/// Draws everything in the runner: parallax skyline (<see cref="CityBackdrop"/>), the scrolling tile rooftops, essence orbs,
 /// Spider-Man (plus his web when swinging), the distance/essence counters, and the end screen.
 /// </summary>
 /// <remarks>
@@ -42,12 +42,6 @@ public class WorldView : WorldLayer
     // 1 tileset pixel = 2 world units, so a 16px tile = TileSize (32)
     private const float PixelScale = RooftopTrack.TileSize / (float)Src;
 
-    // skyline is 320x192px, drawn at 2.5x so it's exactly as wide as the world (800x480).
-    // it tiles seamlessly and scrolls slower than the roofs for parallax
-    private const float SkylineScale = World.Height / 192f;
-    private const float SkylineWidth = 320 * SkylineScale;
-    private const float SkylineParallax = 0.2f;
-
     private static readonly Color RopeColor = new(235, 240, 245);
     private static readonly Color NewBestColor = new(255, 220, 70);
     private static readonly Color SavedColor = new(150, 235, 160);
@@ -70,7 +64,7 @@ public class WorldView : WorldLayer
     private readonly GameSession _session;
     private readonly SpriteFont _font;
     private readonly Texture2D _tileset;
-    private readonly Texture2D _skyline;
+    private readonly CityBackdrop _backdrop;
     private readonly Texture2D _spidey;
     private EssenceArt _essenceArt;
     private RunRecord? _runRecord;
@@ -80,18 +74,18 @@ public class WorldView : WorldLayer
     /// <param name="session">The game to draw</param>
     /// <param name="font">The font to draw with</param>
     /// <param name="tileset">Textures/tileset_city_free</param>
-    /// <param name="skyline">Textures/background_tileset_city_free</param>
+    /// <param name="backdrop">The parallax city behind the rooftops (day/dusk/night)</param>
     /// <param name="spidey">Textures/spiderman (sprite sheet with the background removed)</param>
-    public WorldView(GameSession session, SpriteFont font, Texture2D tileset, Texture2D skyline, Texture2D spidey)
+    public WorldView(GameSession session, SpriteFont font, Texture2D tileset, CityBackdrop backdrop, Texture2D spidey)
     {
         _session = session ?? throw new ArgumentNullException(nameof(session));
         _font = font;
         _tileset = tileset;
-        _skyline = skyline;
+        _backdrop = backdrop;
         _spidey = spidey;
 
-        // orange from the skyline's sky, used to fill anything outside the world
-        BackgroundColor = new Color(212, 128, 77);
+        // fills anything outside the world; follows the time of day (see Update)
+        BackgroundColor = backdrop?.FillColor(0) ?? Color.Black;
 
         Transition.OnDuration = TimeSpan.FromSeconds(1.5);
         Transition.OffDuration = TimeSpan.FromSeconds(0.5);
@@ -132,6 +126,9 @@ public class WorldView : WorldLayer
         if (_runRecord != null && _session.World.Runner != _recordedRunner)
             _runRecord = null;
 
+        if (_backdrop != null)
+            BackgroundColor = _backdrop.FillColor(_session.World.Track.DistanceMeters);
+
         base.Update(gameTime);
     }
 
@@ -158,7 +155,7 @@ public class WorldView : WorldLayer
         var track = _session.World.Track;
         var runner = _session.World.Runner;
 
-        DrawSkyline(track, left, right);
+        _backdrop?.Draw(SpriteBatch, track.ScrollX, track.DistanceMeters, left, right);
         DrawBuildings(track, left, right, bottom);
         DrawEssence(camera, track, left, right);
         DrawSpiderMan(track, runner);
@@ -219,17 +216,6 @@ public class WorldView : WorldLayer
         spin = _clock * OrbSpinSpeed + phase;
         center = new Vector2(x, orb.Y + OrbBob * MathF.Sin(_clock * 3 + phase));
         return x > left - 20 && x < right + 20;
-    }
-
-    private void DrawSkyline(RooftopTrack track, float left, float right)
-    {
-        float offset = (float)(track.ScrollX * SkylineParallax % SkylineWidth);
-        float x = MathF.Floor((left + offset) / SkylineWidth) * SkylineWidth - offset;
-        for (; x < right; x += SkylineWidth)
-        {
-            var position = new Vector2(MathF.Round(x), 0);
-            SpriteBatch.Draw(_skyline, position, null, Color.White, 0, Vector2.Zero, SkylineScale, SpriteEffects.None, 0);
-        }
     }
 
     private void DrawBuildings(RooftopTrack track, float left, float right, float bottom)

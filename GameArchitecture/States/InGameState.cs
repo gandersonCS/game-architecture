@@ -34,7 +34,7 @@ public sealed class InGameState : AppState, ILoadable
     private ContentManager _content;
     private SpriteFont _gameFont;
     private Texture2D _tileset;
-    private Texture2D _skyline;
+    private CityBackdrop _backdrop;
     private Texture2D _spidey;
     private WorldView _worldView;
     private PausePolicy _pausePolicy;
@@ -91,7 +91,7 @@ public sealed class InGameState : AppState, ILoadable
         _content = new ContentManager(services, "Content");
         _gameFont = _content.Load<SpriteFont>("Fonts/gamefont");
         _tileset = _content.Load<Texture2D>("Textures/tileset_city_free");
-        _skyline = _content.Load<Texture2D>("Textures/background_tileset_city_free");
+        _backdrop = new CityBackdrop(_content);
         _spidey = _content.Load<Texture2D>("Textures/spiderman");
         yield return 0.5f;
 
@@ -119,7 +119,7 @@ public sealed class InGameState : AppState, ILoadable
         ListenTo(Array.Empty<InputSource>());
 
         // The world, with the HUD over it; both react to the simulation's events
-        _worldView = Show(new WorldView(Session, _gameFont, _tileset, _skyline, _spidey));
+        _worldView = Show(new WorldView(Session, _gameFont, _tileset, _backdrop, _spidey));
         var hud = Show(new HudLayer(_players));
         GameEventRaised += _worldView.OnGameEvent;
         GameEventRaised += hud.OnGameEvent;

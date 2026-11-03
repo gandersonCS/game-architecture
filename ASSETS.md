@@ -37,8 +37,12 @@ all related characters belong to Marvel. It's not for sale and isn't meant to be
 - `Textures/background.png` (submenu background) and `Textures/gradient.png` (message box fill) -
   procedurally generated placeholders that came with the starter project, public domain.
 
-- `Textures/dawn1-7.png`, `Textures/night1-5.png` - in the folder but not used by the game yet.
+- `Textures/dawn1-7.png`, `Textures/night1-5.png` - parallax city layers (sky first, then
+  buildings far to near), used by `Views/CityBackdrop.cs` for the dusk and night skylines.
+  `dawn7.png` is a flattened preview of the whole dusk scene and isn't loaded.
   Source: TODO.
+- `Textures/day1-6.png` - the daytime skyline. Recolored copies of `dawn1-6.png` (each layer's
+  brightness remapped onto a blue day palette), so same source/license as the dawn layers.
 
 - Spider-Essence orbs - drawn in code (`Views/EssenceArt.cs`), no image file.
 
