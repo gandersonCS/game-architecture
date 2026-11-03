@@ -65,6 +65,24 @@ public sealed class GameSession : ISimulation
 
         World.Wanderer.Update(World, dt);
 
+        // Everyone's input controls the one runner (so a second player can help out, or take over)
+        bool jumpPressed = false, jumpDown = false;
+        foreach (var input in context.Inputs)
+        {
+            jumpPressed |= input.WasPressed(GameAction.Jump);
+            jumpDown |= input.IsDown(GameAction.Jump);
+        }
+
+        World.Track.Advance(dt);
+        var runnerInput = new RunnerInput(jumpPressed, jumpDown);
+        bool restart = World.Runner.Update(runnerInput, World.Track, dt, Events, context.Tick);
+
+        // After the runner has moved, so he collects what he actually passed through
+        World.Essence.Update(World.Track, World.Runner, Events, context.Tick);
+
+        if (restart)
+            World.Restart();
+
         TickCount = context.Tick + 1;
     }
 }

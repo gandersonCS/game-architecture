@@ -38,6 +38,7 @@ public class GameArchitectureExampleGame : Game
     private readonly AudioManager _audio;
     private GameAudio _gameAudio;
     private readonly UserSettings _settings;
+    private readonly SaveFile _save;
 
     /// <param name="args">
     /// Command-line arguments. "--play" skips the menus and starts a game immediately,
@@ -67,6 +68,13 @@ public class GameArchitectureExampleGame : Game
         Services.AddService(_settings.Input);        // The local players' input preferences (e.g. invert Y)
         Services.AddService(_settings.Controls);
         Services.AddService(new PausePolicy());      // Change its settings to change who can pause, etc.
+
+        // The player's progress (high score, last score, Spider-Essence), kept next to the settings
+        _save = new SaveFile(_settings.Store);
+#if DEBUG
+        Console.WriteLine($"[Save] {_settings.Store.PathOf(SaveFile.FileName)}");
+#endif
+        Services.AddService(_save);
 
         _audio = new AudioManager();
         Services.AddService(_audio);

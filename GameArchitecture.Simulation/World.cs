@@ -41,21 +41,56 @@ public sealed class World
     public IReadOnlyList<PlayerAvatar> Players => _players;
 
     /// <summary>
-    /// The placeholder wandering entity
+    /// The placeholder wandering entity (no longer drawn; kept so the starter's tests still run)
     /// </summary>
     public Wanderer Wanderer { get; }
+
+    /// <summary>
+    /// The endless rooftops that scroll past the runner
+    /// </summary>
+    public RooftopTrack Track { get; private set; }
+
+    /// <summary>
+    /// Spider-Man
+    /// </summary>
+    public Runner Runner { get; private set; }
+
+    /// <summary>
+    /// The Spider-Essence orbs to collect on this run
+    /// </summary>
+    public EssenceField Essence { get; private set; }
 
     public World(ulong seed)
     {
         Random = new DeterministicRandom(seed);
         Wanderer = new Wanderer(new Vector2(100, 100), new Vector2(Width / 2, 200));
+        Track = new RooftopTrack(Random);
+        Runner = new Runner(Track);
+
+        // The orbs have their own random numbers (derived from the seed), so spawning them
+        // doesn't change the city a seed builds
+        Essence = new EssenceField(new DeterministicRandom(seed ^ EssenceSeedMix));
     }
+
+    private const ulong EssenceSeedMix = 0x9E3779B97F4A7C15;
 
     /// <summary>
     /// Finds the avatar belonging to the player, or null if they have none
     /// </summary>
     public PlayerAvatar FindPlayer(PlayerId player)
         => _players.Find(p => p.Owner == player);
+
+    /// <summary>
+    /// Starts a new run: a new city (from the same random stream, so it is still deterministic)
+    /// and Spider-Man back on its first roof
+    /// </summary>
+    internal void Restart()
+    {
+        Track = new RooftopTrack(Random);
+        Runner = new Runner(Track);
+        ulong essenceSeed = ((ulong)Random.NextUInt() << 32) | Random.NextUInt();
+        Essence = new EssenceField(new DeterministicRandom(essenceSeed ^ EssenceSeedMix));
+    }
 
     internal PlayerAvatar AddPlayer(PlayerId player)
     {

@@ -11,6 +11,7 @@
 /// </remarks>
 
 using Microsoft.Xna.Framework.Content.Pipeline;
+using Microsoft.Xna.Framework.Content.Pipeline.Processors;
 using MonoGame.Framework.Content.Pipeline.Builder;
 
 var defaultArgs = new ContentBuilderParams()
@@ -56,6 +57,22 @@ public class Builder : ContentBuilder
         // default), so music tracks can be cross-faded by the CIS580.Audio music player.
         content.Include<WildcardRule>("Audio/Sfx/*.wav");
         content.Include<WildcardRule>("Audio/Music/*.wav");
+
+        // The game's .mp3 tracks. An .mp3 would normally build as a Song, so each is built as a
+        // SoundEffect instead, like the .wav music. Only the tracks the game uses are listed:
+        // every track is decoded into memory, so building all of them would waste build time
+        // and space. Add a line here when a new track is needed.
+        string[] tracks =
+        {
+            "Title Menu",                           // Main menu
+        };
+        foreach (var track in tracks)
+            content.Include($"Audio/Music/{track}.mp3", new Mp3Importer(), new SoundEffectProcessor());
+
+        // Music with an intro that plays once before looping (see LoopingTrack). These are 16-bit
+        // .wav files copied as-is, because the game reads their samples itself to loop them
+        // seamlessly. The loop points are in GameAudio.
+        content.IncludeCopy<WildcardRule>("Audio/Loops/*.wav");
 
         return content;
     }

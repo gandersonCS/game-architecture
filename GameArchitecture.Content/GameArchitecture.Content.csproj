@@ -7,6 +7,8 @@
   -->
   <PropertyGroup>
     <OutputType>Exe</OutputType>
+    <!-- Lets the builder run on a newer .NET runtime than the one it targets (e.g. only .NET 10 installed) -->
+    <RollForward>Major</RollForward>
     <ImplicitUsings>enable</ImplicitUsings>
     <AppendTargetFrameworkToOutputPath>false</AppendTargetFrameworkToOutputPath>
   </PropertyGroup>

@@ -14,6 +14,10 @@ namespace CIS580.Audio;
 /// Song and MediaPlayer can only play one track at a time, so they can't cross-fade.
 /// </para>
 /// <para>
+/// A <see cref="LoopingTrack"/> can be played instead, for a track whose intro plays once before
+/// it loops.
+/// </para>
+/// <para>
 /// The music can also be "ducked": turned down while something else needs attention, such as
 /// the pause menu, then brought back up.
 /// </para>
@@ -28,7 +32,7 @@ public sealed class MusicPlayer
     // A track that is playing, and how far it has faded in
     private sealed class Track
     {
-        public SoundEffect Sound;
+        public object Key;                // The SoundEffect or LoopingTrack being played
         public SoundEffectInstance Instance;
         public Fader Fade;
     }
@@ -50,7 +54,13 @@ public sealed class MusicPlayer
     /// <summary>
     /// The track playing (or fading in), or null if there is none
     /// </summary>
-    public SoundEffect Current => _current?.Sound;
+    public SoundEffect Current => _current?.Key as SoundEffect;
+
+    /// <summary>
+    /// The looping track playing (or fading in), or null if there is none (or a plain
+    /// <see cref="SoundEffect"/> is playing)
+    /// </summary>
+    public LoopingTrack CurrentLoopingTrack => _current?.Key as LoopingTrack;
 
     /// <summary>
     /// Whether the music is ducked
@@ -72,7 +82,29 @@ public sealed class MusicPlayer
     public void Play(SoundEffect track, TimeSpan? fade = null)
     {
         ArgumentNullException.ThrowIfNull(track);
-        if (_current?.Sound == track)
+        Play(track, () =>
+        {
+            var instance = track.CreateInstance();
+            instance.IsLooped = true;
+            return instance;
+        }, fade);
+    }
+
+    /// <summary>
+    /// Plays a track with an intro: the intro plays once, then the loop repeats. Cross-fades from
+    /// whatever is playing; asking for the track that is already playing does nothing.
+    /// </summary>
+    /// <param name="track">The track to play</param>
+    /// <param name="fade">How long the cross-fade takes (null for <see cref="DefaultFade"/>)</param>
+    public void Play(LoopingTrack track, TimeSpan? fade = null)
+    {
+        ArgumentNullException.ThrowIfNull(track);
+        Play(track, track.CreateInstance, fade);
+    }
+
+    private void Play(object key, Func<SoundEffectInstance> createInstance, TimeSpan? fade)
+    {
+        if (_current?.Key == key)
         {
             _current.Fade.FadeTo(1f, fade ?? DefaultFade);   // In case it was fading out
             return;
@@ -80,10 +112,9 @@ public sealed class MusicPlayer
 
         FadeOutCurrent(fade ?? DefaultFade);
 
-        var instance = track.CreateInstance();
-        instance.IsLooped = true;
+        var instance = createInstance();
         instance.Volume = 0f;
-        _current = new Track { Sound = track, Instance = instance, Fade = new Fader(0f) };
+        _current = new Track { Key = key, Instance = instance, Fade = new Fader(0f) };
         _current.Fade.FadeTo(1f, fade ?? DefaultFade);
         instance.Play();
     }

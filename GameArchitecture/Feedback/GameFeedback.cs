@@ -55,6 +55,17 @@ public sealed class GameFeedback
     {
         switch (gameEvent)
         {
+            case RunEnded:
+                // A hard knock when the run ends
+                _world.Shake(0.6f);
+                _hitStop.Start(TimeSpan.FromMilliseconds(90));
+                foreach (var local in _players)
+                    _rumble.Play(local, 0.8f, 0.4f, TimeSpan.FromMilliseconds(250));
+                break;
+            case RunnerLanded landed when landed.FallSpeed > 700f:
+                // A heavy landing
+                _world.Shake(0.15f);
+                break;
             case PlayerJoined joined:
                 // A short buzz, so players can tell which gamepad is theirs
                 var player = PlayerFor(joined.Player);

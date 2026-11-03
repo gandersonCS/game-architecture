@@ -16,16 +16,15 @@ public sealed class MainMenuState : AppState
         ListenTo(Controls.AllDevices());
         Game.Services.GetService<GameAudio>().PlayMenuMusic();
 
+        // Shows behind the submenus (Options, The Closet); the main menu draws its own scene
         Show(new BackgroundLayer());
-        // For a single player game, pass null for onLocalMultiplayer to remove that choice
         Show(new MainMenuLayer(
             onPlay: StartGame,
-            onLocalMultiplayer: _ => Flow.Change(new LobbyState()),
             onExit: () => Game.Exit()));
     }
 
     /// <summary>
-    /// Starts a single player game for whoever chose "Play Game", using the device they chose it with
+    /// Starts a single player run for whoever chose "Run", using the device they chose it with
     /// </summary>
     private void StartGame(InputSource chosenWith)
     {

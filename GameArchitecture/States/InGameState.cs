@@ -33,10 +33,15 @@ public sealed class InGameState : AppState, ILoadable
 
     private ContentManager _content;
     private SpriteFont _gameFont;
+    private Texture2D _tileset;
+    private Texture2D _skyline;
+    private Texture2D _spidey;
     private WorldView _worldView;
     private PausePolicy _pausePolicy;
     private GameAudio _audio;
     private GameSettings _settings;
+    private SaveFile _save;
+    private Runner _recordedRun;       // The last run whose score and Spider-Essence were saved
     private readonly Rumble _rumble = new();
     private readonly HitStop _hitStop = new();
 
@@ -85,11 +90,15 @@ public sealed class InGameState : AppState, ILoadable
         // unloaded when the game ends
         _content = new ContentManager(services, "Content");
         _gameFont = _content.Load<SpriteFont>("Fonts/gamefont");
+        _tileset = _content.Load<Texture2D>("Textures/tileset_city_free");
+        _skyline = _content.Load<Texture2D>("Textures/background_tileset_city_free");
+        _spidey = _content.Load<Texture2D>("Textures/spiderman");
         yield return 0.5f;
 
         _pausePolicy = services.GetService<PausePolicy>() ?? new PausePolicy();
         _audio = services.GetService<GameAudio>();
         _settings = services.GetService<GameSettings>();
+        _save = services.GetService<SaveFile>();
 
         Session = new GameSession(seed: (ulong)Environment.TickCount64);
         Runner = new SessionRunner(Session);
@@ -110,7 +119,7 @@ public sealed class InGameState : AppState, ILoadable
         ListenTo(Array.Empty<InputSource>());
 
         // The world, with the HUD over it; both react to the simulation's events
-        _worldView = Show(new WorldView(Session, _gameFont));
+        _worldView = Show(new WorldView(Session, _gameFont, _tileset, _skyline, _spidey));
         var hud = Show(new HudLayer(_players));
         GameEventRaised += _worldView.OnGameEvent;
         GameEventRaised += hud.OnGameEvent;
@@ -120,7 +129,46 @@ public sealed class InGameState : AppState, ILoadable
         GameEventRaised += feedback.OnGameEvent;
         GameEventRaised += gameEvent => _audio.OnGameEvent(gameEvent, Session.World);
         _audio.PlayGameMusic();
+
+        // Save the player's progress automatically at the end of each run
+        GameEventRaised += OnGameEvent;
+        Game.Exiting += OnGameExiting;
     }
+
+    private void OnGameEvent(GameEvent gameEvent)
+    {
+        if (gameEvent is RunEnded ended)
+        {
+            var record = RecordRun(ended.DistanceMeters);
+            if (record is RunRecord saved)
+                _worldView.ShowRunRecord(saved);
+        }
+    }
+
+    /// <summary>
+    /// Saves the current run's distance and Spider-Essence (once per run)
+    /// </summary>
+    private RunRecord? RecordRun(double meters)
+    {
+        var run = Session?.World.Runner;
+        if (_save == null || run == null || run == _recordedRun)
+            return null;
+
+        _recordedRun = run;
+        return _save.RecordRun(meters, Session.World.Essence.CollectedThisRun);
+    }
+
+    /// <summary>
+    /// Quitting part-way through a run still banks what was collected (and the distance so far)
+    /// </summary>
+    private void SaveRunInProgress()
+    {
+        var world = Session?.World;
+        if (world != null && world.Runner.State != RunnerState.Dead && world.Track.DistanceMeters >= 1)
+            RecordRun(world.Track.DistanceMeters);
+    }
+
+    private void OnGameExiting(object sender, EventArgs args) => SaveRunInProgress();
 
     protected override void Covered()
     {
@@ -136,6 +184,10 @@ public sealed class InGameState : AppState, ILoadable
 
     protected override void Exit()
     {
+        // Leaving mid-run (quit from the pause menu): save what was collected
+        Game.Exiting -= OnGameExiting;
+        SaveRunInProgress();
+
         // Stop the game's sounds and vibration (the music changes with the next state)
         _rumble.StopAll();
         _audio?.Audio.Effects.StopAll();
