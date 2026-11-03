@@ -4,47 +4,47 @@ using CIS580.Settings;
 namespace GameArchitecture.Settings;
 
 /// <summary>
-/// The player's progress: what is kept between runs (as opposed to <see cref="GameSettings"/>,
-/// which is how they like the game set up). Saved as save.json, next to the settings.
+/// Player progress that carries over between runs (different from <see cref="GameSettings"/>,
+/// which is just preferences). Gets saved to save.json next to the settings file.
 /// </summary>
 /// <remarks>
-/// Add a property here to save something new (it's saved automatically). Give it a sensible
-/// default, so older save files without it still load.
+/// To save something new just add a property here, it gets serialized automatically. Give it a
+/// default value so old save files still load.
 /// </remarks>
 public sealed class SaveData
 {
-    /// <summary>The furthest run, in whole meters</summary>
+    /// <summary>Best distance, in meters</summary>
     public int HighScoreMeters { get; set; }
 
-    /// <summary>The most recent run, in whole meters</summary>
+    /// <summary>Last run's distance, in meters</summary>
     public int LastScoreMeters { get; set; }
 
-    /// <summary>How many runs have been finished</summary>
+    /// <summary>Total runs finished</summary>
     public int RunsPlayed { get; set; }
 
-    /// <summary>The Spider-Essence the player has to spend in the Closet</summary>
+    /// <summary>Spider-Essence the player can spend in the Closet</summary>
     public int SpiderEssence { get; set; }
 }
 
 /// <summary>
-/// What happened when a run was recorded, for the end-of-run screen
+/// Result of recording a run, used by the end-of-run screen
 /// </summary>
-/// <param name="Meters">How far the run went</param>
-/// <param name="EssenceCollected">The Spider-Essence collected on the run</param>
-/// <param name="TotalEssence">The player's Spider-Essence now, including this run's</param>
-/// <param name="NewHighScore">Whether the run beat the previous best</param>
-/// <param name="HighScoreMeters">The best run now (this one, if it was a new best)</param>
-/// <param name="Saved">Whether the save file was written (if not, see the store's LastError)</param>
+/// <param name="Meters">Distance of the run</param>
+/// <param name="EssenceCollected">Essence picked up this run</param>
+/// <param name="TotalEssence">Player's total essence after adding this run</param>
+/// <param name="NewHighScore">True if this beat the old best</param>
+/// <param name="HighScoreMeters">Current best (this run if it was a new record)</param>
+/// <param name="Saved">Whether saving worked (check the store's LastError if not)</param>
 public readonly record struct RunRecord(
     int Meters, int EssenceCollected, int TotalEssence, bool NewHighScore, int HighScoreMeters, bool Saved);
 
 /// <summary>
-/// Loads the player's progress when the game starts, and saves it automatically whenever a
-/// run ends (or something is bought). A single instance is shared through the game's services.
+/// Loads progress on startup and saves whenever a run ends or something gets bought. One shared
+/// instance lives in the game's services.
 /// </summary>
 /// <remarks>
-/// It uses the same <see cref="SettingsStore"/> as the settings, so a missing or damaged save
-/// file starts fresh (the damaged one is kept as save.json.bad) rather than stopping the game.
+/// Uses the same <see cref="SettingsStore"/> as the settings, so if the save file is missing or
+/// corrupted we just start fresh (the bad file gets kept as save.json.bad) instead of crashing.
 /// </remarks>
 public sealed class SaveFile
 {
@@ -56,22 +56,22 @@ public sealed class SaveFile
         Data = store.Load(FileName, () => new SaveData());
     }
 
-    /// <summary>Where the save file is kept</summary>
+    /// <summary>Path to the save file</summary>
     public SettingsStore Store { get; }
 
-    /// <summary>The player's progress</summary>
+    /// <summary>Current progress</summary>
     public SaveData Data { get; }
 
-    /// <summary>Whether the player has finished a run yet</summary>
+    /// <summary>True once the player has finished at least one run</summary>
     public bool HasPlayed => Data.RunsPlayed > 0;
 
     /// <summary>
-    /// Records a finished run (its distance becomes the last score, and the high score if it's
-    /// the best yet, and its Spider-Essence is banked), then saves.
+    /// Records a finished run - updates last score, high score if it's a record, adds the essence -
+    /// and then saves.
     /// </summary>
     public RunRecord RecordRun(double meters, int essence)
     {
-        // Rounded the same way the HUD shows it, so the saved score matches what the player saw
+        // round it the same way the HUD does so the saved score matches what the player saw
         int score = (int)Math.Round(Math.Max(0, meters));
         bool newBest = score > Data.HighScoreMeters;
 
@@ -86,9 +86,9 @@ public sealed class SaveFile
     }
 
     /// <summary>
-    /// Spends Spider-Essence (e.g. on a costume in the Closet), if the player has enough, and saves
+    /// Spends essence (like buying a suit in the Closet) if the player has enough, then saves
     /// </summary>
-    /// <returns>Whether they had enough (if not, nothing is spent)</returns>
+    /// <returns>False if they couldn't afford it (nothing gets spent)</returns>
     public bool TrySpend(int amount)
     {
         if (amount < 0 || amount > Data.SpiderEssence)
@@ -99,9 +99,9 @@ public sealed class SaveFile
     }
 
     /// <summary>
-    /// Saves the progress
+    /// Saves progress to disk
     /// </summary>
-    /// <returns>Whether it was saved (if not, see the store's LastError)</returns>
+    /// <returns>Whether it saved (check the store's LastError if not)</returns>
     public bool Save() => Store.Save(FileName, Data);
 
     private static int AddClamped(int a, int b) => (int)Math.Min(int.MaxValue, (long)a + b);

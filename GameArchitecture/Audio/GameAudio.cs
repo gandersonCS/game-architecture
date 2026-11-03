@@ -41,7 +41,7 @@ public sealed class GameAudio
 
         MenuMusic = content.Load<SoundEffect>("Audio/Music/Title Menu");
 
-        // A run plays one of these, picked at random. Each plays its intro once, then loops.
+        // each run picks one of these at random. intro plays once, then it loops
         RunMusic = Array.ConvertAll(RunTracks, track => LoadLoopingTrack(content, track));
 
         // Gameplay sounds go on the Effects bus, which is paused along with the game
@@ -63,34 +63,34 @@ public sealed class GameAudio
     public SoundEffect MenuMusic { get; }
 
     /// <summary>
-    /// The tracks a run can play; each run picks one at random
+    /// The songs that can play during a run (random pick each run)
     /// </summary>
     public LoopingTrack[] RunMusic { get; }
 
     /// <summary>
-    /// A music track with an intro, and where its loop is (in seconds from the start of the file)
+    /// A song with an intro, plus its loop points (seconds from the start of the file)
     /// </summary>
-    /// <param name="File">The .wav file in Assets/Audio/Loops, without the extension</param>
-    /// <param name="LoopStart">Where the loop starts: everything before it is the intro, played once</param>
-    /// <param name="LoopEnd">Where the loop jumps back to LoopStart (null: the end of the file)</param>
+    /// <param name="File">Name of the .wav in Assets/Audio/Loops, no extension</param>
+    /// <param name="LoopStart">Loop start time. Anything before this is the intro and only plays once</param>
+    /// <param name="LoopEnd">Where it jumps back to LoopStart (null = end of the file)</param>
     private readonly record struct LoopInfo(string File, double LoopStart, double? LoopEnd = null);
 
-    // The run music's loop points. These were found by analysing each track's beat and sections,
-    // so that the loop is a whole number of bars and the jump lands on a downbeat. To fine-tune
-    // one, nudge the numbers (the loop length should stay a whole number of bars).
+    // loop points for the run music. I worked these out from each song's tempo and sections so
+    // the loop is a whole number of bars and the jump back lands on a downbeat. if one sounds off,
+    // nudge the numbers but keep the loop length a whole number of bars
     private static readonly LoopInfo[] RunTracks =
     {
-        // 90 BPM: a 4 s intro; the loop is 36 bars, ending before the fade-out at the end of the file
+        // 90 BPM, 4s intro, 36 bar loop that stops before the fade-out at the end
         new("Action A", LoopStart: 4.385, LoopEnd: 100.385),
-        // 128 BPM: a 2 s quiet intro; the loop is the rest of the track (53 bars)
+        // 128 BPM, 2s quiet intro, rest of the song loops (53 bars)
         new("Action B", LoopStart: 2.340),
-        // 120 BPM: a 1 s riser, then the loop is the rest of the track (34 bars)
+        // 120 BPM, 1s riser, rest of the song loops (34 bars)
         new("Tutorial", LoopStart: 1.0096),
     };
 
     private static LoopingTrack LoadLoopingTrack(ContentManager content, LoopInfo info)
     {
-        // The .wav files are copied as-is by the content builder (not built), so they are read directly
+        // these .wavs get copied as-is by the content builder instead of built, so we read them straight from disk
         string path = Path.Combine(content.RootDirectory, "Audio", "Loops", info.File + ".wav");
         using var stream = TitleContainer.OpenStream(path);
         return LoopingTrack.FromWav(stream, TimeSpan.FromSeconds(info.LoopStart),
@@ -103,8 +103,8 @@ public sealed class GameAudio
     public void PlayMenuMusic() => Audio.MusicPlayer.Play(MenuMusic);
 
     /// <summary>
-    /// Cross-fades to a random run track (never the same one as the last run, so back-to-back
-    /// runs sound different). It starts from its intro, then loops without replaying the intro.
+    /// Cross-fades into a random run song. Never picks the same one as last run so it doesn't get
+    /// repetitive. Plays the intro first, then loops without the intro.
     /// </summary>
     public void PlayGameMusic()
     {

@@ -1,10 +1,11 @@
-﻿<?xml version="1.0" encoding="utf-8"?>
+<?xml version="1.0" encoding="utf-8"?>
 <XnaContent xmlns:Graphics="Microsoft.Xna.Framework.Content.Pipeline.Graphics">
 	<Asset Type="Graphics:FontDescription">
-		<!-- A font file next to this .spritefont (bundled so content builds on every OS; see LiberationSans-LICENSE.txt) -->
-		<FontName>LiberationSans-Regular.ttf</FontName>
-		<Size>20</Size>
-		<Spacing>2</Spacing>
+		<!-- Menu text, prompts, options, HUD messages (Theme.TextFont). Komika Axis has every character. -->
+		<FontName>KOMIKAX_.ttf</FontName>
+		<Size>18</Size>
+		<Spacing>1</Spacing>
+		<UseKerning>true</UseKerning>
 		<Style>Regular</Style>
 		<CharacterRegions>
 			<CharacterRegion>

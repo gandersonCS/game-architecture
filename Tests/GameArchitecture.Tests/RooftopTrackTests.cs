@@ -98,7 +98,7 @@ public class RooftopTrackTests
     [Fact]
     public void ThingsThatScrolledOffAreForgotten()
     {
-        var track = Run(seed: 6, ticks: 12000);     // 200 seconds
+        var track = Run(seed: 6, ticks: 12000);     // = 200 sec
 
         Assert.True(track.Buildings.Count < 60, $"{track.Buildings.Count} buildings kept");
         Assert.True(track.Buildings[0].EndColumn * (double)RooftopTrack.TileSize >= track.ScrollX - 1000);

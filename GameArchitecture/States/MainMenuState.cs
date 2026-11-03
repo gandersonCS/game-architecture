@@ -16,7 +16,7 @@ public sealed class MainMenuState : AppState
         ListenTo(Controls.AllDevices());
         Game.Services.GetService<GameAudio>().PlayMenuMusic();
 
-        // Shows behind the submenus (Options, The Closet); the main menu draws its own scene
+        // background for the submenus (Options, The Closet). the main menu draws its own scene
         Show(new BackgroundLayer());
         Show(new MainMenuLayer(
             onPlay: StartGame,
@@ -24,7 +24,7 @@ public sealed class MainMenuState : AppState
     }
 
     /// <summary>
-    /// Starts a single player run for whoever chose "Run", using the device they chose it with
+    /// Starts a solo run for whoever picked "Run", on whatever device they used to pick it
     /// </summary>
     private void StartGame(InputSource chosenWith)
     {

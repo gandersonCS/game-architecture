@@ -58,20 +58,20 @@ public class Builder : ContentBuilder
         content.Include<WildcardRule>("Audio/Sfx/*.wav");
         content.Include<WildcardRule>("Audio/Music/*.wav");
 
-        // The game's .mp3 tracks. An .mp3 would normally build as a Song, so each is built as a
-        // SoundEffect instead, like the .wav music. Only the tracks the game uses are listed:
-        // every track is decoded into memory, so building all of them would waste build time
-        // and space. Add a line here when a new track is needed.
+        // mp3 tracks the game uses. mp3s normally build as a Song, so these get forced to build as
+        // SoundEffect like the wav music. I only listed the ones actually used since each one gets
+        // decoded into memory and building all of them takes forever and wastes space. add a line
+        // here if you need another track.
         string[] tracks =
         {
-            "Title Menu",                           // Main menu
+            "Title Menu",                           // main menu music
         };
         foreach (var track in tracks)
             content.Include($"Audio/Music/{track}.mp3", new Mp3Importer(), new SoundEffectProcessor());
 
-        // Music with an intro that plays once before looping (see LoopingTrack). These are 16-bit
-        // .wav files copied as-is, because the game reads their samples itself to loop them
-        // seamlessly. The loop points are in GameAudio.
+        // songs with an intro that plays once before looping (see LoopingTrack). these are 16-bit
+        // wavs that get copied as-is, since the game reads the samples itself to loop seamlessly.
+        // loop points are set in GameAudio.
         content.IncludeCopy<WildcardRule>("Audio/Loops/*.wav");
 
         return content;

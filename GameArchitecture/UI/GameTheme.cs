@@ -18,7 +18,10 @@ public static class GameTheme
     /// <param name="audio">Plays the theme's sounds (on the UI bus)</param>
     public static UiTheme Create(ContentManager content, AudioManager audio) => new()
     {
-        TitleFont = content.Load<SpriteFont>("Fonts/menufont"),
+        // Titles: The Amazing Spider-Man. Everything else: Komika Axis. (The main menu's buttons
+        // and the in-game text have their own fonts: Fonts/buttonfont and Fonts/gamefont.)
+        TitleFont = content.Load<SpriteFont>("Fonts/titlefont"),
+        TitleScale = 1f,
         TextFont = content.Load<SpriteFont>("Fonts/menufont"),
         PanelTexture = content.Load<Texture2D>("Textures/gradient"),
         Sounds = new UiSoundSet

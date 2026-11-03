@@ -41,7 +41,7 @@ public sealed class InGameState : AppState, ILoadable
     private GameAudio _audio;
     private GameSettings _settings;
     private SaveFile _save;
-    private Runner _recordedRun;       // The last run whose score and Spider-Essence were saved
+    private Runner _recordedRun;       // last run we already saved, so it doesn't get saved twice
     private readonly Rumble _rumble = new();
     private readonly HitStop _hitStop = new();
 
@@ -130,7 +130,7 @@ public sealed class InGameState : AppState, ILoadable
         GameEventRaised += gameEvent => _audio.OnGameEvent(gameEvent, Session.World);
         _audio.PlayGameMusic();
 
-        // Save the player's progress automatically at the end of each run
+        // auto-save progress whenever a run ends
         GameEventRaised += OnGameEvent;
         Game.Exiting += OnGameExiting;
     }
@@ -146,7 +146,7 @@ public sealed class InGameState : AppState, ILoadable
     }
 
     /// <summary>
-    /// Saves the current run's distance and Spider-Essence (once per run)
+    /// Saves this run's distance + essence (only once per run)
     /// </summary>
     private RunRecord? RecordRun(double meters)
     {
@@ -159,7 +159,7 @@ public sealed class InGameState : AppState, ILoadable
     }
 
     /// <summary>
-    /// Quitting part-way through a run still banks what was collected (and the distance so far)
+    /// If you quit in the middle of a run you still keep the essence you got (and the distance so far)
     /// </summary>
     private void SaveRunInProgress()
     {
@@ -184,7 +184,7 @@ public sealed class InGameState : AppState, ILoadable
 
     protected override void Exit()
     {
-        // Leaving mid-run (quit from the pause menu): save what was collected
+        // quit mid-run from the pause menu - save what they collected
         Game.Exiting -= OnGameExiting;
         SaveRunInProgress();
 

@@ -5,15 +5,15 @@ using GameArchitecture.Views;
 namespace GameArchitecture.UI;
 
 /// <summary>
-/// Spider-Man on the main menu: he stands idle for a few seconds, then throws a random attack
-/// (jab, upward kick, or uppercut), then goes back to idle, forever.
+/// The animated Spider-Man on the main menu. Idles for a few seconds, does a random attack
+/// (jab, upward kick or uppercut), goes back to idle, and repeats.
 /// </summary>
 /// <remarks>
-/// This only decides which frame to show; <see cref="MainMenuLayer"/> draws it.
+/// This class just picks the frame, <see cref="MainMenuLayer"/> does the actual drawing.
 /// </remarks>
 public sealed class MenuSpiderMan
 {
-    /// <summary>One animation: its frames, how long each is shown, and whether it repeats</summary>
+    /// <summary>An animation - list of frames, how long each one shows, and whether it loops</summary>
     private sealed record Clip(SpiderFrames.Frame[] Frames, float FrameSeconds, bool Loops)
     {
         public float Length => Frames.Length * FrameSeconds;
@@ -28,7 +28,7 @@ public sealed class MenuSpiderMan
         new(MenuSpiderFrames.Uppercut, 0.07f, Loops: false),
     };
 
-    // How long he stays idle between attacks (seconds)
+    // idle time between attacks, in seconds
     private const float MinIdleSeconds = 1.5f;
     private const float MaxIdleSeconds = 3.5f;
 
@@ -43,10 +43,10 @@ public sealed class MenuSpiderMan
         _idleLeft = NextIdleSeconds();
     }
 
-    /// <summary>True while an attack is playing (false while idle)</summary>
+    /// <summary>True during an attack, false while idling</summary>
     public bool IsFighting => !ReferenceEquals(_clip, Idle);
 
-    /// <summary>The frame to draw this frame</summary>
+    /// <summary>Which frame to draw right now</summary>
     public SpiderFrames.Frame CurrentFrame
     {
         get
@@ -84,7 +84,7 @@ public sealed class MenuSpiderMan
     private float NextIdleSeconds()
         => MinIdleSeconds + (float)_random.NextDouble() * (MaxIdleSeconds - MinIdleSeconds);
 
-    // A random attack, never the same one twice in a row
+    // pick a random attack, but don't repeat the last one
     private int NextFight()
     {
         int next;
@@ -102,13 +102,13 @@ public sealed class MenuSpiderMan
 }
 
 /// <summary>
-/// Where the menu's idle and attack frames are on Textures/spiderman.png. Like
-/// <see cref="SpiderFrames"/>, each source rectangle is a tight box around one frame, and each
-/// animation shares a baseline (the sheet row of his feet) so he doesn't jitter up and down.
+/// Frame rectangles for the menu idle/attack animations on Textures/spiderman.png. Same idea as
+/// <see cref="SpiderFrames"/>: each rect is cropped tight around a frame, and every frame in an
+/// animation uses the same baseline (where his feet are) so he doesn't bounce around.
 /// </summary>
 public static class MenuSpiderFrames
 {
-    // Anchored on a shared baseline: the origin is the frame's middle, at the baseline's height
+    // origin = middle of the frame horizontally, at the baseline vertically
     private static SpiderFrames.Frame OnBaseline(int baseline, int x, int y, int width, int height)
         => new(new Rectangle(x, y, width, height), new Vector2(width / 2f, baseline - y));
 
@@ -118,28 +118,28 @@ public static class MenuSpiderFrames
     private static SpiderFrames.Frame Upper(int x, int y, int w, int h) => OnBaseline(1607, x, y, w, h);
     private static SpiderFrames.Frame Land(int x, int y, int w, int h) => OnBaseline(1687, x, y, w, h);
 
-    /// <summary>The "Standing" row: a looping idle</summary>
+    /// <summary>"Standing" row on the sheet, loops</summary>
     public static readonly SpiderFrames.Frame[] Standing =
     {
         Stand(8, 251, 29, 33), Stand(51, 251, 30, 33), Stand(96, 252, 30, 31), Stand(137, 252, 30, 31),
         Stand(183, 252, 30, 32), Stand(227, 252, 30, 32), Stand(268, 252, 30, 32), Stand(312, 252, 30, 32),
     };
 
-    /// <summary>The "Jab Punch" row</summary>
+    /// <summary>"Jab Punch" row</summary>
     public static readonly SpiderFrames.Frame[] JabPunch =
     {
         Jab(8, 1179, 36, 34), Jab(61, 1180, 50, 34), Jab(123, 1180, 49, 34), Jab(181, 1180, 48, 33),
         Jab(240, 1181, 41, 32), Jab(295, 1183, 37, 30), Jab(346, 1180, 30, 33),
     };
 
-    /// <summary>The "Upward Kick" row</summary>
+    /// <summary>"Upward Kick" row</summary>
     public static readonly SpiderFrames.Frame[] UpwardKick =
     {
         Kick(12, 1423, 35, 38), Kick(68, 1412, 34, 28), Kick(128, 1392, 41, 50), Kick(209, 1383, 35, 58),
         Kick(276, 1386, 31, 54), Kick(337, 1409, 40, 38), Kick(405, 1424, 32, 39),
     };
 
-    /// <summary>The "Uppercut" rows: the jump, then the landing</summary>
+    /// <summary>"Uppercut" rows - jump part, then landing part</summary>
     public static readonly SpiderFrames.Frame[] Uppercut =
     {
         Upper(7, 1574, 43, 33), Upper(62, 1572, 46, 35), Upper(144, 1542, 34, 63), Upper(206, 1525, 28, 75),

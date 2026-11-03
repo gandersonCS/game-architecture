@@ -37,7 +37,7 @@ public class RunnerTests
     [Fact]
     public void Jump_LeavesTheRoof_ThenLandsOnIt()
     {
-        // Jump once, on tick 10, and hold it for the whole jump. The first roof is long enough to land on.
+        // one jump at tick 10, held the whole time. first roof is long enough to land back on it
         var (session, runner) = Start(1, tick => tick >= 10 ? Holding(GameAction.Jump) : default);
         for (int i = 0; i < 12; i++)
             runner.Step();
@@ -113,7 +113,7 @@ public class RunnerTests
     [Fact]
     public void PressingJumpAfterTheRunEnds_StartsANewRun()
     {
-        // Does nothing until the run ends, then taps jump over and over (alternating down and up)
+        // do nothing until the run ends, then spam jump (down, up, down, up...)
         GameSession session = null;
         var (s, runner) = Start(1, tick =>
             session?.World.Runner.State == RunnerState.Dead && tick % 2 == 0
@@ -138,7 +138,7 @@ public class RunnerTests
     [Fact]
     public void HoldingJumpThroughTheAirStartsASwing_AndLettingGoEndsIt()
     {
-        // Hold the button from tick 10 to tick 90, then let go
+        // hold from tick 10 to 90 then release
         var (session, runner) = Start(1, tick => tick is >= 10 and < 90 ? Holding(GameAction.Jump) : default);
 
         bool swung = false, anchoredWhileSwinging = true;
@@ -161,7 +161,7 @@ public class RunnerTests
     [Fact]
     public void ATapJump_NeverSwings()
     {
-        // Pressed for 3 ticks, then let go
+        // tap for 3 ticks then release
         var (session, runner) = Start(1, tick => tick is >= 10 and < 13 ? Holding(GameAction.Jump) : default);
 
         for (int i = 0; i < 90; i++)
@@ -174,7 +174,7 @@ public class RunnerTests
     [Fact]
     public void Swinging_BuildsSpeedThroughTheBottomOfTheArc()
     {
-        // Hold the button from tick 10 for the whole jump and swing
+        // hold from tick 10 through the jump and the swing
         var (session, runner) = Start(1, tick => tick >= 10 ? Holding(GameAction.Jump) : default);
 
         float fastest = 0;

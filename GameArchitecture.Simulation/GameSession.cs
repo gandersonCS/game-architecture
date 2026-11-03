@@ -65,7 +65,7 @@ public sealed class GameSession : ISimulation
 
         World.Wanderer.Update(World, dt);
 
-        // Everyone's input controls the one runner (so a second player can help out, or take over)
+        // every player's input drives the same runner, so player 2 can help or take over
         bool jumpPressed = false, jumpDown = false;
         foreach (var input in context.Inputs)
         {
@@ -77,7 +77,7 @@ public sealed class GameSession : ISimulation
         var runnerInput = new RunnerInput(jumpPressed, jumpDown);
         bool restart = World.Runner.Update(runnerInput, World.Track, dt, Events, context.Tick);
 
-        // After the runner has moved, so he collects what he actually passed through
+        // do this after the runner moves so he picks up what he actually went through
         World.Essence.Update(World.Track, World.Runner, Events, context.Tick);
 
         if (restart)

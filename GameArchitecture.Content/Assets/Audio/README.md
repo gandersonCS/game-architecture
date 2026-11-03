@@ -1,18 +1,28 @@
-# Placeholder audio
+# Audio
 
-These sounds are procedurally generated placeholders. Replace them with your own game's audio,
-and update the provenance and license entries in the top-level `ASSETS.md`.
+Sources and licenses for everything in here are in the top-level `ASSETS.md`.
 
 | File | Use |
 |---|---|
-| `Sfx/ui_move.wav` | Menu selection moved |
-| `Sfx/ui_confirm.wav` | Menu item confirmed |
-| `Sfx/ui_back.wav` | Menu cancelled / back |
-| `Sfx/player_join.wav` | A player joined the game |
-| `Sfx/player_leave.wav` | A player left the game |
-| `Music/menu_loop.wav` | Menu music (seamless loop, 90 BPM) |
-| `Music/game_loop.wav` | Gameplay music (seamless loop, 124 BPM) |
+| `Music/Title Menu.mp3` | Main menu music (Spider-Man Unlimited) |
+| `Loops/Action A.wav` | Run music, intro + loop (Spider-Man Unlimited) |
+| `Loops/Action B.wav` | Run music, intro + loop (Spider-Man Unlimited) |
+| `Loops/Tutorial.wav` | Run music, intro + loop (Spider-Man Unlimited) |
+| `Sfx/ui_move.wav` | Menu selection moved (starter placeholder) |
+| `Sfx/ui_confirm.wav` | Menu item confirmed (starter placeholder) |
+| `Sfx/ui_back.wav` | Menu back/cancel (starter placeholder) |
+| `Sfx/player_join.wav` | Player joined (starter placeholder) |
+| `Sfx/player_leave.wav` | Player left (starter placeholder) |
+| `Music/menu_loop.wav`, `Music/game_loop.wav` | Old starter placeholder loops, not played anymore |
 
-Music is stored as `.wav` and built as `SoundEffect` content (see `Builder.cs`), which lets the
-music player loop and cross-fade tracks. Content is loaded by its path relative to `Assets/`,
-without the extension, e.g. `Content.Load<SoundEffect>("Audio/Sfx/ui_move")`.
+The other mp3s in `Music/` are from the same Spider-Man Unlimited rip and are saved for later
+(boss fights etc.).
+
+How it gets built (see `Builder.cs`):
+- `Sfx/*.wav` and `Music/*.wav` build as `SoundEffect`.
+- mp3s only get built if they're listed in `Builder.cs`, and they're built as `SoundEffect` instead
+  of `Song` so the music player can cross-fade them.
+- `Loops/*.wav` are copied as-is and read directly by `GameAudio` so it can loop past the intro.
+
+Load content by its path relative to `Assets/` with no extension, e.g.
+`Content.Load<SoundEffect>("Audio/Sfx/ui_move")`.

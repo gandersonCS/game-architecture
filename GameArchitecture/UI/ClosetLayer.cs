@@ -10,19 +10,18 @@ using GameArchitecture.Views;
 namespace GameArchitecture.UI;
 
 /// <summary>
-/// The Closet: the player's saved progress (best run, last run, and Spider-Essence to spend),
-/// and where costumes and collectables will live. For now the shop is a placeholder, with a
-/// Back button.
+/// The Closet screen. Shows saved stats (best run, last run, essence) and is where suits and
+/// collectables are going to go. Right now the shop part is just a placeholder + Back button.
 /// </summary>
 /// <remarks>
-/// The stats come from the <see cref="SaveFile"/> service, which saves itself at the end of
-/// every run, so they are always up to date.
+/// Stats are read from the <see cref="SaveFile"/> service, which saves after every run, so
+/// they're always current.
 /// </remarks>
 public class ClosetLayer : MenuLayer
 {
     private const string ComingSoon = "Costumes to spend your Spider-Essence on are coming soon";
 
-    // Colors (matching the main menu)
+    // same colors as the main menu
     private static readonly Color PanelColor = new(13, 19, 32);
     private static readonly Color AccentColor = new(232, 72, 60);
     private static readonly Color LabelColor = new(125, 138, 163);
@@ -61,14 +60,14 @@ public class ClosetLayer : MenuLayer
         var viewport = Game.GraphicsDevice.Viewport;
         float centerX = viewport.Width / 2f;
         float alpha = Transition.Alpha;
-        float slide = Transition.Offset * 60;     // The panel rises into place as the closet opens
+        float slide = Transition.Offset * 60;     // panel slides up as the closet opens
 
         DrawBackdrop(gameTime);
 
         var data = _save?.Data ?? new SaveData();
         bool hasPlayed = _save?.HasPlayed ?? false;
 
-        // The stats panel, between the title and the Back button
+        // stats panel sits between the title and the Back button
         float panelTop = Theme.TitleTop + 48 + slide;
         var panel = new RectangleF(centerX - PanelWidth / 2, panelTop, PanelWidth, RowHeight * 3 + 20);
         float backTop = MathF.Max(panel.Y + panel.Height + 70, viewport.Height - 90);
@@ -83,7 +82,7 @@ public class ClosetLayer : MenuLayer
         DrawRow(panel, 1, "Last Run", hasPlayed ? $"{data.LastScoreMeters} m" : "--", 0, alpha);
         DrawRow(panel, 2, "Spider-Essence", data.SpiderEssence.ToString(), EssenceIconRadius * 2 + 10, alpha);
 
-        // Thin dividers between the rows
+        // thin lines between rows
         for (int i = 1; i < 3; i++)
             Fill(new RectangleF(panel.X + 20, panel.Y + 10 + RowHeight * i, panel.Width - 40, 1), LabelColor * (0.3f * alpha));
 
@@ -94,7 +93,7 @@ public class ClosetLayer : MenuLayer
 
         Menu.Draw(SpriteBatch, Theme, new Vector2(centerX, backTop), Transition, gameTime);
 
-        // The title slides down into place as the menu transitions on (as in every menu)
+        // title slides down while the menu transitions in, same as the other menus
         var titleFont = Theme.TitleFont;
         var titlePosition = new Vector2(centerX, Theme.TitleTop - Transition.Offset * 100);
         SpriteBatch.DrawString(titleFont, Title, titlePosition, Theme.TitleColor * alpha, 0,
@@ -106,7 +105,7 @@ public class ClosetLayer : MenuLayer
     }
 
     /// <summary>
-    /// One row of the stats panel: a label on the left, its value on the right
+    /// A single stats row - label on the left, value on the right
     /// </summary>
     private void DrawRow(RectangleF panel, int row, string label, string value, float labelIndent, float alpha)
     {

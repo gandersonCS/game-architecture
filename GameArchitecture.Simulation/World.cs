@@ -41,22 +41,22 @@ public sealed class World
     public IReadOnlyList<PlayerAvatar> Players => _players;
 
     /// <summary>
-    /// The placeholder wandering entity (no longer drawn; kept so the starter's tests still run)
+    /// The starter's wandering placeholder. Not drawn anymore, I just left it in so the starter tests still pass
     /// </summary>
     public Wanderer Wanderer { get; }
 
     /// <summary>
-    /// The endless rooftops that scroll past the runner
+    /// The endless rooftops scrolling past
     /// </summary>
     public RooftopTrack Track { get; private set; }
 
     /// <summary>
-    /// Spider-Man
+    /// Spider-Man himself
     /// </summary>
     public Runner Runner { get; private set; }
 
     /// <summary>
-    /// The Spider-Essence orbs to collect on this run
+    /// Spider-Essence orbs for the current run
     /// </summary>
     public EssenceField Essence { get; private set; }
 
@@ -67,8 +67,8 @@ public sealed class World
         Track = new RooftopTrack(Random);
         Runner = new Runner(Track);
 
-        // The orbs have their own random numbers (derived from the seed), so spawning them
-        // doesn't change the city a seed builds
+        // orbs get their own RNG (based off the seed) so adding them didn't change what city a
+        // seed makes
         Essence = new EssenceField(new DeterministicRandom(seed ^ EssenceSeedMix));
     }
 
@@ -81,8 +81,8 @@ public sealed class World
         => _players.Find(p => p.Owner == player);
 
     /// <summary>
-    /// Starts a new run: a new city (from the same random stream, so it is still deterministic)
-    /// and Spider-Man back on its first roof
+    /// Starts a new run with a fresh city and puts Spider-Man back on the first roof. Uses the same
+    /// random stream so it's still deterministic
     /// </summary>
     internal void Restart()
     {

@@ -11,8 +11,8 @@ namespace GameArchitecture.Simulation;
 public enum GameAction
 {
     /// <summary>
-    /// The one button: jump (hold for a higher jump), keep holding in the air to swing, and
-    /// press again after a run ends to restart.
+    /// The only button. Jump (hold to go higher), keep holding in the air to swing, and press it
+    /// after dying to restart.
     /// </summary>
     Jump = 0,
 }

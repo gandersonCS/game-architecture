@@ -9,13 +9,13 @@ using CIS580.Views;
 namespace GameArchitecture.UI;
 
 /// <summary>
-/// The main menu: the buttons in a list down the left side, and Spider-Man on a rooftop on the
-/// right, cycling randomly between idle and fighting. It only presents choices: what happens when
-/// one is made is up to the state that showed it.
+/// The main menu. Buttons are listed on the left, and on the right Spider-Man stands on a rooftop
+/// and randomly switches between idling and fighting. This layer only shows the options - the
+/// state that opened it decides what each one does.
 /// </summary>
 public class MainMenuLayer : MenuLayer
 {
-    // Colors (from the mockup)
+    // colors I pulled from the mockup
     private static readonly Color PanelColor = new(13, 19, 32);
     private static readonly Color ButtonColor = new(201, 211, 227);
     private static readonly Color HighlightColor = new(232, 72, 60);
@@ -23,7 +23,7 @@ public class MainMenuLayer : MenuLayer
     private static readonly Color RoofColor = new(26, 35, 54);
     private static readonly Color RoofEdgeColor = new(46, 59, 88);
 
-    // A short description of each button, shown under the list (in the same order as the buttons)
+    // little description for each button, shown under the list (same order as the buttons)
     private static readonly string[] Hints =
     {
         "Start a new run",
@@ -32,16 +32,16 @@ public class MainMenuLayer : MenuLayer
         "Quit to desktop",
     };
 
-    private const float ButtonScale = 1.5f;
 
     private readonly Action _onExit;
     private readonly MenuSpiderMan _spiderMan = new();
     private readonly float[] _fade;
     private Texture2D _skyline;
     private Texture2D _spidey;
+    private SpriteFont _buttonFont;
     private float _clock;
 
-    /// <param name="onPlay">Called when a player chooses Run, with who chose it</param>
+    /// <param name="onPlay">Runs when someone picks Run, and gets told who picked it</param>
     /// <param name="onExit">Called when the player confirms they want to exit</param>
     public MainMenuLayer(Action<InputSource> onPlay, Action onExit)
         : base("")
@@ -62,6 +62,7 @@ public class MainMenuLayer : MenuLayer
         base.Load();
         _skyline = Game.Content.Load<Texture2D>("Textures/background_tileset_city_free");
         _spidey = Game.Content.Load<Texture2D>("Textures/spiderman");
+        _buttonFont = Game.Content.Load<SpriteFont>("Fonts/buttonfont");    // Action Comics Black
     }
 
     /// <summary>
@@ -80,7 +81,7 @@ public class MainMenuLayer : MenuLayer
         _clock = (float)gameTime.TotalGameTime.TotalSeconds;
         _spiderMan.Update(gameTime);
 
-        // The selection highlight eases in and out as the selection moves
+        // highlight fades in/out as you move the selection
         float step = (float)gameTime.ElapsedGameTime.TotalSeconds * 8;
         for (int i = 0; i < _fade.Length; i++)
         {
@@ -95,12 +96,12 @@ public class MainMenuLayer : MenuLayer
         float width = viewport.Width, height = viewport.Height;
         float alpha = Transition.Alpha;
 
-        // The left side holds the menu; the right side is the stage for Spider-Man
-        float panelWidth = MathF.Max(300, width * 0.38f);
+        // menu on the left half, Spider-Man's stage on the right
+        float panelWidth = MathF.Max(380, width * 0.45f);    // wide enough for the button font
         float roofTop = MathF.Round(height * 0.82f);
         float stageCenter = panelWidth + (width - panelWidth) / 2;
 
-        // --- Pixel art (point sampling so it stays crisp) ---
+        // --- pixel art (point sampling so it doesn't get blurry) ---
         SpriteBatch.Begin(samplerState: SamplerState.PointClamp);
 
         DrawSkyline(width, height, alpha);
@@ -110,10 +111,10 @@ public class MainMenuLayer : MenuLayer
 
         SpriteBatch.End();
 
-        // --- The menu panel and its text ---
+        // --- menu panel + text ---
         SpriteBatch.Begin();
 
-        // The panel slides in from the left as the menu comes on
+        // panel slides in from the left when the menu opens
         float slide = -Transition.Offset * panelWidth;
         DrawPanel(panelWidth, height, slide, alpha);
         DrawTitlePlaceholder(new RectangleF(48 + slide, height * 0.10f, panelWidth - 96, height * 0.17f), alpha);
@@ -124,12 +125,12 @@ public class MainMenuLayer : MenuLayer
 
     private void DrawSkyline(float width, float height, float alpha)
     {
-        // The skyline is 320x192; scale it to fill the screen's height and tile it across,
-        // drifting slowly so the menu feels alive
+        // skyline image is 320x192. scale it to the screen height, tile it horizontally, and scroll
+        // it slowly so the menu doesn't look static
         float scale = height / _skyline.Height;
         float tileWidth = _skyline.Width * scale;
         float offset = _clock * 12 % tileWidth;
-        var tint = new Color(alpha * 0.8f, alpha * 0.8f, alpha * 0.9f);    // A little darker, for night
+        var tint = new Color(alpha * 0.8f, alpha * 0.8f, alpha * 0.9f);    // darken it a bit so it looks like night
 
         for (float x = -offset; x < width; x += tileWidth)
             SpriteBatch.Draw(_skyline, new Vector2(MathF.Round(x), 0), null, tint, 0, Vector2.Zero, scale,
@@ -138,11 +139,11 @@ public class MainMenuLayer : MenuLayer
 
     private void DrawSpiderMan(Vector2 feet, float height, float alpha)
     {
-        // Whole-number scales keep the pixels square: 3x in the default 800x480 window
+        // stick to whole number scales so the pixels stay square (3x at the default 800x480)
         float scale = MathF.Max(2, MathF.Round(height / 160));
         var frame = _spiderMan.CurrentFrame;
 
-        // A soft shadow under his feet
+        // soft shadow under his feet
         var shadowSize = new Vector2(30 * scale, 3 * scale);
         Fill(new RectangleF(feet.X - shadowSize.X / 2, feet.Y - shadowSize.Y / 2, shadowSize.X, shadowSize.Y),
             Color.Black * (0.35f * alpha));
@@ -153,7 +154,7 @@ public class MainMenuLayer : MenuLayer
 
     private void DrawPanel(float panelWidth, float height, float slide, float alpha)
     {
-        // Solid behind the buttons, then fading out over the skyline
+        // solid color behind the buttons, then fades out over the skyline
         const float fadeWidth = 120;
         float solid = panelWidth - fadeWidth;
         Fill(new RectangleF(slide, 0, solid, height), PanelColor * alpha);
@@ -169,7 +170,7 @@ public class MainMenuLayer : MenuLayer
 
     private void DrawTitlePlaceholder(RectangleF box, float alpha)
     {
-        // Replace this with the title logo once it's ready
+        // TODO: swap this for the title logo when it's done
         var color = new Color(58, 71, 96) * alpha;
         Fill(new RectangleF(box.X, box.Y, box.Width, 2), color);
         Fill(new RectangleF(box.X, box.Y + box.Height - 2, box.Width, 2), color);
@@ -185,8 +186,8 @@ public class MainMenuLayer : MenuLayer
 
     private void DrawButtons(Vector2 topLeft, float width, float alpha)
     {
-        var font = Theme.TextFont;
-        float rowHeight = font.LineSpacing * ButtonScale + 10;
+        var font = _buttonFont;
+        float rowHeight = font.LineSpacing + 14;
         var position = topLeft;
 
         for (int i = 0; i < Menu.Items.Count; i++)
@@ -194,27 +195,27 @@ public class MainMenuLayer : MenuLayer
             var item = Menu.Items[i];
             float fade = _fade[i];
 
-            // The selected button slides right a little, gets a tinted row and a red marker
+            // selected button shifts right a bit and gets a tinted row + red marker
             float nudge = 8 * fade;
             var row = new RectangleF(position.X + nudge, position.Y, width, rowHeight - 6);
             Fill(row, HighlightColor * (0.16f * fade * alpha));
             Fill(new RectangleF(row.X + 8, row.Y + 8, 5, row.Height - 16), HighlightColor * (fade * alpha));
 
             var color = !item.IsEnabled ? Theme.DisabledColor : Color.Lerp(ButtonColor, Color.White, fade);
-            float textHeight = font.LineSpacing * ButtonScale;
+            float textHeight = font.LineSpacing;
             var textPosition = new Vector2(row.X + 26, row.Y + (row.Height - textHeight) / 2);
-            SpriteBatch.DrawString(font, item.Text, textPosition, color * alpha, 0, Vector2.Zero, ButtonScale,
-                SpriteEffects.None, 0);
+            // The button font only has capital letters
+            SpriteBatch.DrawString(font, item.Text.ToUpperInvariant(), textPosition, color * alpha);
 
             position.Y += rowHeight;
         }
 
-        // What the selected button does
+        // description of whatever button is selected
         int selected = Menu.SelectedIndex;
         if (selected >= 0 && selected < Hints.Length)
         {
             var hintPosition = new Vector2(topLeft.X + 8, position.Y + 12);
-            SpriteBatch.DrawString(font, Hints[selected], hintPosition, HintColor * alpha, 0, Vector2.Zero, 0.75f,
+            SpriteBatch.DrawString(Theme.TextFont, Hints[selected], hintPosition, HintColor * alpha, 0, Vector2.Zero, 0.85f,
                 SpriteEffects.None, 0);
         }
     }

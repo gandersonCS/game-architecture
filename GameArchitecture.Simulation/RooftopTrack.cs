@@ -5,26 +5,25 @@ using CIS580.Simulation;
 namespace GameArchitecture.Simulation;
 
 /// <summary>
-/// Which color scheme a building uses (each is a panel in the city tileset).
+/// Building color scheme - each one matches a panel in the city tileset.
 /// </summary>
 public enum BuildingStyle { Blue = 0, Green = 1, Red = 2 }
 
 /// <summary>
-/// Where a window sits on a building: a column local to the building, and an absolute tile row.
-/// A window is 2x2 tiles.
+/// A window on a building. Column is relative to the building, row is the actual tile row.
+/// Windows are 2x2 tiles.
 /// </summary>
 public readonly record struct WindowSlot(int Column, int Row);
 
 /// <summary>
-/// A point in the sky the runner is swinging from, in track space (X is the distance along the
-/// whole track, not the screen; Y is world units from the top of the screen, and can be
-/// negative: above the top of the screen).
+/// Web anchor point in track space. X is distance along the whole track (not screen x), Y is
+/// from the top of the screen and can go negative if the anchor is above the screen.
 /// </summary>
 public readonly record struct WebAnchor(double X, float Y);
 
 /// <summary>
-/// One rooftop: a block of columns, with a flat roof at <see cref="TopRow"/>, that extends
-/// down past the bottom of the screen.
+/// A single building: a run of columns with a flat roof at <see cref="TopRow"/> that goes down
+/// off the bottom of the screen.
 /// </summary>
 public sealed class Building
 {
@@ -37,77 +36,75 @@ public sealed class Building
         Windows = windows;
     }
 
-    /// <summary>First tile column, counted along the whole endless track (not the screen)</summary>
+    /// <summary>First column, counted along the whole track (not the screen)</summary>
     public int StartColumn { get; }
     public int WidthTiles { get; }
-    /// <summary>One past the last tile column</summary>
+    /// <summary>One past the last column</summary>
     public int EndColumn => StartColumn + WidthTiles;
-    /// <summary>The tile row of the roof. Smaller means taller (row 0 is the top of the screen).</summary>
+    /// <summary>Roof tile row. Lower number = taller building (row 0 is the top of the screen).</summary>
     public int TopRow { get; }
     public BuildingStyle Style { get; }
     public IReadOnlyList<WindowSlot> Windows { get; }
 }
 
 /// <summary>
-/// The endless city the runner runs along. The runner never really moves forward: the track
-/// scrolls past, and new rooftops of random height (with gaps between some of them) are
-/// generated just ahead of the screen.
+/// The endless city. The runner doesn't actually move forward - the track scrolls past him and
+/// we keep generating random-height buildings (sometimes with gaps) just off the right side.
 /// </summary>
 /// <remarks>
-/// This is simulation state, so it follows the same rules as the rest of the simulation: it
-/// only changes in <see cref="Advance"/> (called once per tick), takes time from the tick's
-/// delta, and gets its randomness from the world's seeded generator. The same seed therefore
-/// always builds the same city. It has no MonoGame types, so the views draw it by reading it.
+/// This is part of the simulation, so it only changes inside <see cref="Advance"/> (once per tick),
+/// uses the tick's dt, and pulls randomness from the world's seeded RNG. Same seed = same city
+/// every time. No MonoGame stuff in here, the views just read from it to draw.
 ///
-/// Units: one tile is <see cref="TileSize"/> world units, and the screen is
-/// <see cref="Rows"/> tiles tall. Everything is positioned in "track space" (the distance
-/// along the whole track); the view subtracts <see cref="ScrollX"/> to get a screen position.
+/// Units: a tile is <see cref="TileSize"/> world units and the screen is <see cref="Rows"/> tiles
+/// tall. Positions are in "track space" (distance along the whole track); the view subtracts
+/// <see cref="ScrollX"/> to get screen coordinates.
 /// </remarks>
 public sealed class RooftopTrack
 {
-    /// <summary>World units per tile. The art is 16 pixel tiles drawn at 2x.</summary>
+    /// <summary>World units per tile. Tiles are 16px in the art, drawn at 2x.</summary>
     public const int TileSize = 32;
 
-    /// <summary>Tile rows on screen (15 x 32 = 480, the world's height)</summary>
+    /// <summary>Rows of tiles on screen (15 * 32 = 480, same as the world height)</summary>
     public const int Rows = 15;
 
-    // Roof heights, as tile rows: row 6 is a tall building, row 11 a short one
+    // roof height range in tile rows. 6 = tall building, 11 = short
     public const int MinTopRow = 6;
     public const int MaxTopRow = 11;
 
-    /// <summary>The most a roof may rise or drop from the previous building, in tiles</summary>
+    /// <summary>Max a roof can go up or down compared to the last building (in tiles)</summary>
     public const int MaxStepRows = 2;
 
     public const int MinWidthTiles = 6;
     public const int MaxWidthTiles = 16;
 
-    // Gaps between buildings, in tiles. A roll picks one of three kinds:
-    //   none         (the next building touches this one),
-    //   small gaps   (a jump clears them),
-    //   big gaps     (too wide to jump at the starting speed: jump, then swing across them).
+    // gap sizes in tiles. each new building rolls one of:
+    //   no gap     - buildings touch
+    //   small gap  - you can just jump it
+    //   big gap    - too far to jump at starting speed, you need to jump and then swing
     public const float NoGapChance = 0.35f;
-    public const float SmallGapChance = 0.35f;     // the rest are big gaps
+    public const float SmallGapChance = 0.35f;     // whatever's left over = big gap
     public const int SmallGapMin = 2;
     public const int SmallGapMax = 4;
     public const int BigGapMin = 9;
     public const int BigGapMax = 13;
 
-    /// <summary>Where the runner stands, in world units from the left of the screen</summary>
+    /// <summary>Runner's x on screen (world units from the left edge)</summary>
     public const float RunnerX = 200f;
 
-    /// <summary>How far past the runner (world units) buildings are generated. Wider than any window.</summary>
+    /// <summary>How far ahead of the runner we generate buildings. Bigger than any window size.</summary>
     public const float LookAhead = 1800f;
 
-    // Buildings are forgotten once this far behind the left edge of the screen
+    // drop buildings once they're this far off the left side
     private const double DiscardMargin = 600;
 
-    // The cruising scroll speed, in world units per second, and how fast it ramps up
+    // cruising speed (units/sec) and how quickly it ramps up over a run
     public const float BaseSpeed = 360f;
     public const float MaxSpeed = 720f;
     public const float Acceleration = 4f;
 
-    // After a swing the city may be going faster than cruising speed. It settles back gradually
-    // (so momentum carries), and picks up again at this rate if it was slower.
+    // a swing can leave the city going faster than cruising speed. it slows back down gradually
+    // so momentum carries over. if it's slower it speeds back up at SpeedRecovery
     public const float SpeedDecaySeconds = 1.6f;
     public const float SpeedRecovery = 500f;
 
@@ -122,41 +119,41 @@ public sealed class RooftopTrack
         Generate();
     }
 
-    /// <summary>The buildings that are on screen or about to be, from left to right</summary>
+    /// <summary>Buildings currently on screen or coming up, left to right</summary>
     public IReadOnlyList<Building> Buildings => _buildings;
 
-    /// <summary>How far the track has scrolled, in world units. A double so very long runs stay smooth.</summary>
+    /// <summary>Total scroll distance in world units. Double so long runs don't get jittery.</summary>
     public double ScrollX { get; private set; }
 
-    /// <summary>The runner's position along the track (he stands still on screen; the track moves)</summary>
+    /// <summary>Runner's position along the track (he's fixed on screen, the track moves)</summary>
     public double RunnerTrackX => ScrollX + RunnerX;
 
     /// <summary>
-    /// The speed the city settles at, which creeps up the longer the run goes on
+    /// Normal speed of the city, slowly goes up the longer you survive
     /// </summary>
     public float CruiseSpeed => MathF.Min(MaxSpeed, BaseSpeed + Acceleration * (float)_elapsed);
 
     /// <summary>
-    /// How fast the city is scrolling right now, in world units per second. It is the cruising
-    /// speed, except while swinging (and just after), when the runner's momentum sets it.
+    /// Current scroll speed in units/sec. Normally the cruising speed, but during (and right after)
+    /// a swing it's whatever speed the swing gave him.
     /// </summary>
     public float Speed { get; private set; } = BaseSpeed;
 
-    /// <summary>How far the runner has gone, in meters (one tile is one meter)</summary>
+    /// <summary>Distance run in meters (1 tile = 1 meter)</summary>
     public double DistanceMeters => ScrollX / TileSize;
 
-    /// <summary>False once the run is over: the city stops scrolling</summary>
+    /// <summary>Set to false when the run ends so the city stops</summary>
     public bool IsScrolling { get; internal set; } = true;
 
     /// <summary>
-    /// True while the runner is swinging: then he decides where the city is (see
-    /// <see cref="DriveScroll"/>) instead of it scrolling at its own speed.
+    /// True while swinging. The runner controls the scroll position then (see <see cref="DriveScroll"/>)
+    /// instead of the track moving on its own.
     /// </summary>
     public bool ScrollDrivenByRunner { get; internal set; }
 
     /// <summary>
-    /// Sets where the city is and how fast it is moving. Used by the runner while swinging,
-    /// because a swing's speed comes from the swing.
+    /// Lets the runner set the scroll position and speed directly. Used while swinging since the
+    /// swing decides the speed.
     /// </summary>
     internal void DriveScroll(double scrollX, float speed)
     {
@@ -165,7 +162,7 @@ public sealed class RooftopTrack
     }
 
     /// <summary>
-    /// Scrolls the track and generates new buildings ahead of the screen. Call once per tick.
+    /// Scrolls the track and spawns new buildings ahead. Call this once per tick.
     /// </summary>
     public void Advance(float deltaSeconds)
     {
@@ -173,7 +170,7 @@ public sealed class RooftopTrack
         {
             _elapsed += deltaSeconds;
 
-            // Ease back to cruising speed: gently if we're fast (momentum), quicker if slow
+            // go back to cruising speed - slowly if we're going fast (keeps momentum), faster if we're slow
             float cruise = CruiseSpeed;
             if (Speed < cruise)
                 Speed = MathF.Min(cruise, Speed + SpeedRecovery * deltaSeconds);
@@ -189,8 +186,7 @@ public sealed class RooftopTrack
     }
 
     /// <summary>
-    /// The y position of the roof at a point along the track, or null if there is no building
-    /// there (a gap)
+    /// Roof y at a given spot on the track, or null if it's a gap
     /// </summary>
     public float? RoofAt(double trackX)
     {
@@ -202,7 +198,7 @@ public sealed class RooftopTrack
         return null;
     }
 
-    /// <summary>The roof's y position, or the bottom of the screen if there's a gap there</summary>
+    /// <summary>Roof y, or the bottom of the screen if it's a gap</summary>
     public float GroundYAt(double trackX) => RoofAt(trackX) ?? Rows * TileSize;
 
     private void Generate()
@@ -234,7 +230,7 @@ public sealed class RooftopTrack
 
         if (_buildings.Count == 0)
         {
-            // A long, middling first roof, so the runner starts on solid ground
+            // first roof is long and medium height so you don't die right away
             gap = 0;
             width = 24;
             top = 9;
@@ -244,7 +240,7 @@ public sealed class RooftopTrack
             gap = PickGap();
             width = _random.NextInt(MinWidthTiles, MaxWidthTiles + 1);
 
-            // Random height, but never more than a couple of tiles different from the last roof
+            // random height but within MaxStepRows of the last roof
             int previous = _buildings[^1].TopRow;
             int lowest = Math.Max(MinTopRow, previous - MaxStepRows);
             int highest = Math.Min(MaxTopRow, previous + MaxStepRows);
@@ -253,7 +249,7 @@ public sealed class RooftopTrack
 
         var style = (BuildingStyle)_random.NextInt(3);
 
-        // Windows are 2x2 tiles, on a grid: a column every 4 tiles, a row every 3
+        // windows are 2x2, placed on a grid (every 4 columns, every 3 rows)
         var windows = new List<WindowSlot>();
         for (int row = top + 2; row + 2 <= Rows; row += 3)
         {

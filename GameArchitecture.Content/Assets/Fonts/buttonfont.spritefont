@@ -1,0 +1,38 @@
+<?xml version="1.0" encoding="utf-8"?>
+<XnaContent xmlns:Graphics="Microsoft.Xna.Framework.Content.Pipeline.Graphics">
+	<Asset Type="Graphics:FontDescription">
+		<!-- The main menu's buttons. Action Comics Black is capitals only (no lowercase), so the main menu draws its labels in upper case; any other character draws as a dash instead of crashing. -->
+		<FontName>Action Comics Black.ttf</FontName>
+		<Size>22</Size>
+		<Spacing>1</Spacing>
+		<UseKerning>true</UseKerning>
+		<Style>Regular</Style>
+		<DefaultCharacter>-</DefaultCharacter>
+		<CharacterRegions>
+			<CharacterRegion>
+				<Start>&#32;</Start>
+				<End>&#33;</End>
+			</CharacterRegion>
+			<CharacterRegion>
+				<Start>&#36;</Start>
+				<End>&#36;</End>
+			</CharacterRegion>
+			<CharacterRegion>
+				<Start>&#39;</Start>
+				<End>&#39;</End>
+			</CharacterRegion>
+			<CharacterRegion>
+				<Start>&#44;</Start>
+				<End>&#57;</End>
+			</CharacterRegion>
+			<CharacterRegion>
+				<Start>&#63;</Start>
+				<End>&#63;</End>
+			</CharacterRegion>
+			<CharacterRegion>
+				<Start>&#65;</Start>
+				<End>&#90;</End>
+			</CharacterRegion>
+		</CharacterRegions>
+	</Asset>
+</XnaContent>

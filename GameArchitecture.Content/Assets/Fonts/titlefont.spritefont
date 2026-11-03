@@ -1,0 +1,38 @@
+<?xml version="1.0" encoding="utf-8"?>
+<XnaContent xmlns:Graphics="Microsoft.Xna.Framework.Content.Pipeline.Graphics">
+	<Asset Type="Graphics:FontDescription">
+		<!-- Menu titles (Theme.TitleFont). This font has no digits or ! ' ( ) / : ?, so only the characters it has are built; any other character draws as a dash instead of crashing. -->
+		<FontName>The Amazing Spider-Man.ttf</FontName>
+		<Size>40</Size>
+		<Spacing>1</Spacing>
+		<UseKerning>true</UseKerning>
+		<Style>Regular</Style>
+		<DefaultCharacter>-</DefaultCharacter>
+		<CharacterRegions>
+			<CharacterRegion>
+				<Start>&#32;</Start>
+				<End>&#32;</End>
+			</CharacterRegion>
+			<CharacterRegion>
+				<Start>&#35;</Start>
+				<End>&#38;</End>
+			</CharacterRegion>
+			<CharacterRegion>
+				<Start>&#42;</Start>
+				<End>&#46;</End>
+			</CharacterRegion>
+			<CharacterRegion>
+				<Start>&#64;</Start>
+				<End>&#90;</End>
+			</CharacterRegion>
+			<CharacterRegion>
+				<Start>&#97;</Start>
+				<End>&#122;</End>
+			</CharacterRegion>
+			<CharacterRegion>
+				<Start>&#126;</Start>
+				<End>&#126;</End>
+			</CharacterRegion>
+		</CharacterRegions>
+	</Asset>
+</XnaContent>

@@ -9,26 +9,25 @@ using GameArchitecture.Simulation;
 namespace GameArchitecture.Views;
 
 /// <summary>
-/// Draws the endless runner: a parallax skyline, the scrolling tile-map rooftops, the
-/// Spider-Essence orbs, and Spider-Man (with his web, when he swings), plus the distance and
-/// Spider-Essence counters and the end-of-run summary.
+/// Draws everything in the runner: parallax skyline, the scrolling tile rooftops, essence orbs,
+/// Spider-Man (plus his web when swinging), the distance/essence counters, and the end screen.
 /// </summary>
 /// <remarks>
 /// This is purely a view: it reads the <see cref="GameSession"/> and draws it, but never changes
-/// it. The camera never moves; the simulation's <see cref="RooftopTrack"/> scrolls, and each
-/// thing is drawn at (its position along the track - the scroll distance).
+/// it. The camera doesn't move - the <see cref="RooftopTrack"/> scrolls instead, so everything gets
+/// drawn at (track position - scroll distance).
 /// </remarks>
 public class WorldView : WorldLayer
 {
     private static readonly RectangleF WorldArea = new(0, 0, World.Width, World.Height);
 
-    // The city tileset is a grid of 16 pixel tiles. A tile is named by its (column, row).
+    // city tileset = grid of 16px tiles, referenced by (column, row)
     private const int Src = 16;
     private static Rectangle Tile(int column, int row) => new(column * Src, row * Src, Src, Src);
 
-    // Each building style is a 3 column wide panel. A building is drawn in "3 slices": its left
-    // edge uses the panel's left column, its right edge the right column, and everything between
-    // repeats the middle column. Rows: the roof, the row under it, and a plain row for the body.
+    // each building style is a 3-column panel in the tileset. buildings use 3-slice drawing:
+    // left column for the left edge, right column for the right edge, middle column repeated in
+    // between. rows are: roof, the row under the roof, and a plain body row.
     private readonly record struct Panel(int FirstColumn, int RoofRow, int SecondRow, int BodyRow);
     private static readonly Panel[] Panels =
     {
@@ -37,14 +36,14 @@ public class WorldView : WorldLayer
         new(12, 1, 2, 5),    // Red:   columns 12-14
     };
 
-    // The 2x2 tile window (32x32 pixels) in the tileset
+    // window is 2x2 tiles (32x32px) in the tileset
     private static readonly Rectangle WindowSource = new(32, 160, 32, 32);
 
-    // One tileset pixel is two world units (so a 16 pixel tile is TileSize = 32 units)
+    // 1 tileset pixel = 2 world units, so a 16px tile = TileSize (32)
     private const float PixelScale = RooftopTrack.TileSize / (float)Src;
 
-    // The skyline is 320x192 pixels, drawn at 2.5x so it is exactly one world (800x480) wide.
-    // It repeats without a seam, and scrolls at a fraction of the rooftops' speed (parallax).
+    // skyline is 320x192px, drawn at 2.5x so it's exactly as wide as the world (800x480).
+    // it tiles seamlessly and scrolls slower than the roofs for parallax
     private const float SkylineScale = World.Height / 192f;
     private const float SkylineWidth = 320 * SkylineScale;
     private const float SkylineParallax = 0.2f;
@@ -54,17 +53,17 @@ public class WorldView : WorldLayer
     private static readonly Color SavedColor = new(150, 235, 160);
     private static readonly Color NotSavedColor = new(255, 140, 130);
 
-    // Spider-Essence orbs, in world units: each orb's core radius, and how they bob and spin
+    // orb settings in world units: core radius + bob/spin
     private const float OrbRadius = 5f;
     private const float OrbBob = 3f;
     private const float OrbSpinSpeed = 4f;
 
-    // The little burst when an orb is collected
+    // small burst effect when you grab an orb
     private const float BurstSeconds = 0.35f;
     private readonly record struct Burst(double X, float Y, float Start);
     private readonly List<Burst> _bursts = new();
 
-    // The Spider-Essence icon next to the counter, under the distance
+    // essence icon next to the counter (under the distance)
     private static readonly Vector2 EssenceIconCenter = new(30, 68);
     private const float EssenceIconRadius = 7f;
 
@@ -82,7 +81,7 @@ public class WorldView : WorldLayer
     /// <param name="font">The font to draw with</param>
     /// <param name="tileset">Textures/tileset_city_free</param>
     /// <param name="skyline">Textures/background_tileset_city_free</param>
-    /// <param name="spidey">Textures/spiderman (the sprite sheet, with a transparent background)</param>
+    /// <param name="spidey">Textures/spiderman (sprite sheet with the background removed)</param>
     public WorldView(GameSession session, SpriteFont font, Texture2D tileset, Texture2D skyline, Texture2D spidey)
     {
         _session = session ?? throw new ArgumentNullException(nameof(session));
@@ -91,7 +90,7 @@ public class WorldView : WorldLayer
         _skyline = skyline;
         _spidey = spidey;
 
-        // The orange of the skyline's sky, which fills any space beyond the edges of the world
+        // orange from the skyline's sky, used to fill anything outside the world
         BackgroundColor = new Color(212, 128, 77);
 
         Transition.OnDuration = TimeSpan.FromSeconds(1.5);
@@ -105,8 +104,8 @@ public class WorldView : WorldLayer
     }
 
     /// <summary>
-    /// Reacts to something that happened in the simulation: a burst where an orb was collected.
-    /// (A flash for a boss would go here too.)
+    /// Handles sim events - right now just spawns a burst where an orb was picked up.
+    /// (boss flash would go here later)
     /// </summary>
     public void OnGameEvent(GameEvent gameEvent)
     {
@@ -115,8 +114,8 @@ public class WorldView : WorldLayer
     }
 
     /// <summary>
-    /// Shows how the run that just ended was saved (new best, Spider-Essence banked) on the
-    /// end-of-run screen, until the next run starts
+    /// Shows the save results (new best, essence banked) on the end-of-run screen until the next
+    /// run starts
     /// </summary>
     public void ShowRunRecord(RunRecord record)
     {
@@ -129,7 +128,7 @@ public class WorldView : WorldLayer
         _clock = (float)gameTime.TotalGameTime.TotalSeconds;
         _bursts.RemoveAll(b => _clock - b.Start > BurstSeconds);
 
-        // A new run has started: forget the last one's summary
+        // new run started, clear the old summary
         if (_runRecord != null && _session.World.Runner != _recordedRunner)
             _runRecord = null;
 
@@ -138,18 +137,18 @@ public class WorldView : WorldLayer
 
     protected override void UpdateCameras(GameTime gameTime)
     {
-        // The camera stays put and shows the whole world, as large as fits
+        // camera stays still and fits the whole world in the window
         foreach (var camera in Cameras)
             camera.FitToArea(WorldArea);
     }
 
     protected override void DrawWorld(Camera2D camera, GameTime gameTime)
     {
-        // Pixel art must not be smoothed: restart the batch with point sampling
+        // pixel art can't be smoothed, so restart the batch with point sampling
         SpriteBatch.End();
         SpriteBatch.Begin(samplerState: SamplerState.PointClamp, transformMatrix: camera.Transform);
 
-        // What part of the world is visible? (More than the world if the window is a different shape.)
+        // visible area (can be bigger than the world if the window aspect ratio is different)
         float halfWidth = camera.Viewport.Width / 2f / camera.Zoom;
         float halfHeight = camera.Viewport.Height / 2f / camera.Zoom;
         float left = camera.Position.X - halfWidth;
@@ -167,8 +166,8 @@ public class WorldView : WorldLayer
     }
 
     /// <summary>
-    /// Ends the current batch and begins another with the camera's transform, for switching
-    /// between pixel art (point sampling) and smooth glowing orbs (linear sampling)
+    /// Ends the batch and starts a new one with the camera transform. Used to switch between
+    /// pixel art (point sampling) and the smooth glowy orbs (linear sampling)
     /// </summary>
     private void Rebegin(Camera2D camera, BlendState blend, SamplerState sampler)
     {
@@ -182,7 +181,7 @@ public class WorldView : WorldLayer
         if (_essenceArt == null || (orbs.Count == 0 && _bursts.Count == 0))
             return;
 
-        // The glows (and collection bursts) brighten what's behind them...
+        // glows + collect bursts first (these brighten what's behind them)...
         Rebegin(camera, BlendState.Additive, SamplerState.LinearClamp);
         foreach (var orb in orbs)
         {
@@ -196,7 +195,7 @@ public class WorldView : WorldLayer
             _essenceArt.DrawGlow(SpriteBatch, center, OrbRadius * (1 + 2.5f * t), _clock * 12, alpha: 1 - t);
         }
 
-        // ...then the orbs themselves go on top
+        // ...then draw the actual orbs on top
         Rebegin(camera, BlendState.AlphaBlend, SamplerState.LinearClamp);
         foreach (var orb in orbs)
         {
@@ -204,18 +203,18 @@ public class WorldView : WorldLayer
                 _essenceArt.DrawCores(SpriteBatch, center, OrbRadius, spin);
         }
 
-        // Back to pixel art for Spider-Man
+        // switch back to pixel art for Spider-Man
         Rebegin(camera, BlendState.AlphaBlend, SamplerState.PointClamp);
     }
 
     /// <summary>
-    /// Where an orb is drawn (bobbing gently) and how far its pair has spun, if it's on screen
+    /// Gets where to draw an orb (with the bob) and its spin, returns false if it's off screen
     /// </summary>
     private bool OrbOnScreen(EssenceOrb orb, RooftopTrack track, float left, float right, out Vector2 center, out float spin)
     {
         float x = (float)(orb.X - track.ScrollX);
 
-        // Each orb has its own phase (from its position), so a pack shimmers rather than moving in lockstep
+        // give each orb its own phase based on position so a pack shimmers instead of moving in sync
         float phase = (float)(orb.X * 0.05 % (2 * Math.PI));
         spin = _clock * OrbSpinSpeed + phase;
         center = new Vector2(x, orb.Y + OrbBob * MathF.Sin(_clock * 3 + phase));
@@ -240,21 +239,21 @@ public class WorldView : WorldLayer
 
         foreach (var building in track.Buildings)
         {
-            // Where the building's left edge is on screen. Rounded to whole world units so
-            // neighboring tiles never leave hairline gaps.
+            // building's left edge on screen, rounded to whole units so we don't get tiny gaps
+            // between tiles
             float x0 = MathF.Round((float)(building.StartColumn * (double)size - track.ScrollX));
             if (x0 > right || x0 + building.WidthTiles * size < left)
                 continue;
 
             var panel = Panels[(int)building.Style];
 
-            // Only the columns on screen
+            // only draw columns that are on screen
             int firstColumn = Math.Max(0, (int)MathF.Floor((left - x0) / size));
             int lastColumn = Math.Min(building.WidthTiles - 1, (int)MathF.Ceiling((right - x0) / size));
 
             for (int column = firstColumn; column <= lastColumn; column++)
             {
-                // Left edge, middle, or right edge of the panel
+                // pick left edge / middle / right edge of the panel
                 int panelColumn = panel.FirstColumn + (column == 0 ? 0 : column == building.WidthTiles - 1 ? 2 : 1);
 
                 for (int row = building.TopRow; row <= lastRow; row++)
@@ -291,8 +290,8 @@ public class WorldView : WorldLayer
         {
             case RunnerState.Running:
             {
-                // The running animation follows the ground: one frame per stretch of track passed
-                // under his feet, so he runs faster as the city speeds up
+                // run animation is tied to the ground: next frame every X distance traveled, so his legs
+                // speed up as the city speeds up
                 const double unitsPerFrame = 30;
                 int index = (int)(track.ScrollX / unitsPerFrame) % SpiderFrames.Running.Length;
                 DrawFrame(SpiderFrames.Running[index], feet);
@@ -303,7 +302,7 @@ public class WorldView : WorldLayer
             {
                 if (runner.VelocityY < -250)
                 {
-                    // Rising: a tumbling flip
+                    // going up: do a flip
                     int index = (int)(runner.AirSeconds / 0.07f) % SpiderFrames.Flip.Length;
                     DrawFrame(SpiderFrames.Flip[index], feet);
                 }
@@ -320,8 +319,8 @@ public class WorldView : WorldLayer
                 var hand = new Vector2(RooftopTrack.RunnerX, runner.HandY);
                 var anchorOnScreen = new Vector2((float)(anchor.X - track.ScrollX), anchor.Y);
 
-                // The web shoots out to the anchor in a moment, then he hangs from it. His pose
-                // follows the rope's angle.
+                // web shoots out to the anchor quickly, then he hangs from it. pose depends on the
+                // rope angle
                 var tip = Vector2.Lerp(hand, anchorOnScreen, MathF.Min(1f, runner.SwingSeconds / 0.07f));
                 DrawLine(hand, tip, Color.Black * 0.35f, 5);
                 DrawLine(hand, tip, RopeColor, 2.5f);
@@ -346,7 +345,7 @@ public class WorldView : WorldLayer
 
         SpriteBatch.DrawString(_font, $"{track.DistanceMeters:0} m", new Vector2(16, 12), Color.White);
 
-        // This run's Spider-Essence, with its icon, right under the distance
+        // essence count for this run + icon, right below the distance
         int essence = _session.World.Essence.CollectedThisRun;
         var countPosition = new Vector2(EssenceIconCenter.X + EssenceIconRadius + 12, EssenceIconCenter.Y);
         var countOrigin = new Vector2(0, _font.MeasureString("0").Y / 2);
@@ -356,7 +355,7 @@ public class WorldView : WorldLayer
             SpriteEffects.None, 0);
         DrawEssenceIcon(camera, EssenceIconCenter, EssenceIconRadius);
 
-        // A reminder of the controls, at the start of a run
+        // controls hint at the start of a run
         if (runner.State != RunnerState.Dead && track.DistanceMeters < 80)
         {
             const string help = "SPACE / A: jump (hold = higher)     keep holding in the air to swing";
@@ -377,7 +376,7 @@ public class WorldView : WorldLayer
     }
 
     /// <summary>
-    /// The end-of-run summary: the best distance, the Spider-Essence banked, and that it was saved
+    /// End-of-run summary: best distance, essence banked, and whether it saved
     /// </summary>
     private void DrawRunSummary(Camera2D camera, RunRecord record)
     {
@@ -388,7 +387,7 @@ public class WorldView : WorldLayer
         else
             DrawCentered($"Best: {record.HighScoreMeters} m", new Vector2(centerX, 220), Color.White * 0.85f, 0.6f);
 
-        // "+12 Spider-Essence (340 total)", with the icon in front
+        // e.g. "+12 Spider-Essence (340 total)" with the icon in front
         string essence = $"+{record.EssenceCollected} Spider-Essence  ({record.TotalEssence} total)";
         const float essenceScale = 0.6f;
         float textWidth = _font.MeasureString(essence).X * essenceScale;
@@ -403,8 +402,8 @@ public class WorldView : WorldLayer
     }
 
     /// <summary>
-    /// Draws the Spider-Essence icon (a slowly turning pair of orbs). Leaves the batch as it found
-    /// it: point sampled, alpha blended.
+    /// Draws the essence icon (pair of slowly spinning orbs). Puts the batch back the way it was
+    /// afterwards (point sampled, alpha blended).
     /// </summary>
     private void DrawEssenceIcon(Camera2D camera, Vector2 center, float radius)
     {
@@ -423,7 +422,7 @@ public class WorldView : WorldLayer
     {
         var size = _font.MeasureString(text);
         var origin = size / 2;
-        // A dark outline keeps the text readable over any color
+        // dark outline so text is readable on any background
         foreach (var offset in new[] { new Vector2(-2, 0), new Vector2(2, 0), new Vector2(0, -2), new Vector2(0, 2) })
             SpriteBatch.DrawString(_font, text, position + offset, Color.Black * 0.7f, 0, origin, scale, SpriteEffects.None, 0);
         SpriteBatch.DrawString(_font, text, position, color, 0, origin, scale, SpriteEffects.None, 0);
@@ -431,34 +430,34 @@ public class WorldView : WorldLayer
 }
 
 /// <summary>
-/// Where Spider-Man's frames are on Textures/spiderman.png. Each source rectangle is a tight box
-/// around one frame (so frames have different widths).
+/// Frame locations on Textures/spiderman.png. Each rect is cropped tight around a frame, so
+/// the widths aren't all the same.
 /// </summary>
 public static class SpiderFrames
 {
-    /// <summary>A frame, and the point in it (in sheet pixels) that is drawn at the position</summary>
+    /// <summary>A frame plus the point in it (sheet pixels) that lines up with the draw position</summary>
     public readonly record struct Frame(Rectangle Source, Vector2 Origin)
     {
-        /// <summary>Anchored at the middle of the bottom edge: his feet</summary>
+        /// <summary>Origin at bottom center (his feet)</summary>
         public static Frame Feet(int x, int y, int width, int height)
             => new(new Rectangle(x, y, width, height), new Vector2(width / 2f, height));
 
-        /// <summary>Anchored in the middle of the frame (for a tumbling flip)</summary>
+        /// <summary>Origin at the center (for the flip)</summary>
         public static Frame Middle(int x, int y, int width, int height)
             => new(new Rectangle(x, y, width, height), new Vector2(width / 2f, height / 2f + 14));
 
-        /// <summary>Anchored at the middle of the top edge: where the web leaves him</summary>
+        /// <summary>Origin at top center (where the web attaches)</summary>
         public static Frame Hanging(int x, int y, int width, int height)
             => new(new Rectangle(x, y, width, height), new Vector2(width / 2f, 0));
     }
 
-    /// <summary>The sheet row (y) of Spider-Man's feet in the running frames</summary>
+    /// <summary>Sheet y of his feet in the running frames</summary>
     private const int RunBaseline = 364;
 
     private static Frame Run(int x, int y, int width, int height)
         => new(new Rectangle(x, y, width, height), new Vector2(width / 2f, RunBaseline - y));
 
-    // Anchored on a shared baseline, so his feet stay level through the stride
+    // all use the same baseline so his feet don't bob up and down mid-stride
     public static readonly Frame[] Running =
     {
         Run(3, 330, 40, 34), Run(59, 334, 34, 30), Run(106, 336, 44, 28),
@@ -475,7 +474,7 @@ public static class SpiderFrames
     public static readonly Frame Falling = Frame.Feet(230, 509, 27, 32);
     public static readonly Frame Dead = Frame.Middle(242, 2533, 35, 29);
 
-    // Hanging from the web, from the rope pointing far ahead (first) to straight up or behind (last)
+    // swinging poses, ordered from rope pointing way ahead (first) to straight up/behind (last)
     private static readonly Frame[] Swing =
     {
         Frame.Hanging(221, 1974, 45, 35),
@@ -484,7 +483,7 @@ public static class SpiderFrames
         Frame.Hanging(44, 2427, 43, 33),
     };
 
-    /// <summary>The pose for a rope at an angle from straight up (positive: the anchor is ahead)</summary>
+    /// <summary>Picks the swing pose for a rope angle from straight up (positive = anchor ahead)</summary>
     public static Frame SwingFor(float ropeAngleDegrees)
     {
         if (ropeAngleDegrees > 30) return Swing[0];

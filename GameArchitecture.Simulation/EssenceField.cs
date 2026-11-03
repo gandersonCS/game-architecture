@@ -5,75 +5,74 @@ using CIS580.Simulation;
 namespace GameArchitecture.Simulation;
 
 /// <summary>
-/// One Spider-Essence pickup, in track space (X is the distance along the whole track; Y is
-/// world units from the top of the screen)
+/// A single Spider-Essence orb in track space (X = distance along the track, Y = from the top
+/// of the screen)
 /// </summary>
-/// <param name="Pack">Which pack it was spawned in (packs are numbered from 0, in order)</param>
+/// <param name="Pack">Index of the pack it came from (starts at 0)</param>
 public readonly record struct EssenceOrb(double X, float Y, int Pack);
 
 /// <summary>
-/// The shape a pack of Spider-Essence is laid out in
+/// How a pack of orbs is arranged
 /// </summary>
 public enum EssencePackShape { Line, Circle }
 
 /// <summary>
-/// The Spider-Essence currency: packs of 3 to 7 orbs, laid out in a line or a tight circle,
-/// spawned ahead of the runner either sitting on a rooftop or floating in the air where he
-/// can jump or swing through them.
+/// Spider-Essence (the currency). Spawns in packs of 3-7 orbs, either in a line or a small circle,
+/// ahead of the runner. A pack either sits on a roof or floats in the air where you can jump or
+/// swing through it.
 /// </summary>
 /// <remarks>
-/// Like the <see cref="RooftopTrack"/>, this is simulation state: it only changes in
-/// <see cref="Update"/> (once per tick, after the runner has moved), and gets its randomness
-/// from its own seeded generator, so the same seed always spawns the same orbs (and adding
-/// orbs didn't change the city a seed builds). Orbs are removed when collected, and each
-/// collection raises an <see cref="EssenceCollected"/> event for the views and sounds.
+/// Works like <see cref="RooftopTrack"/>: it only changes in <see cref="Update"/> (once a tick,
+/// after the runner moves) and has its own seeded RNG. I gave it a separate RNG so adding orbs
+/// didn't change what city a seed generates. Collected orbs get removed and fire an
+/// <see cref="EssenceCollected"/> event so the view/audio can react.
 /// </remarks>
 public sealed class EssenceField
 {
     public const int MinPackSize = 3;
     public const int MaxPackSize = 7;
 
-    /// <summary>Where the first pack may start, along the track (just off the right of the screen)</summary>
+    /// <summary>Track x where the first pack can show up (just past the right edge of the screen)</summary>
     public const double FirstPackX = 900;
 
-    // The space between the end of one pack and the start of the next, in world units
+    // spacing between packs in world units
     public const float MinPackSpacing = 450f;
     public const float MaxPackSpacing = 950f;
 
-    /// <summary>The chance a pack tries to sit on a roof (it floats in the air if there's no flat roof long enough)</summary>
+    /// <summary>Chance a pack tries to go on a roof (if there's no long enough flat roof it floats instead)</summary>
     public const float RoofChance = 0.5f;
 
-    /// <summary>The chance a pack is a circle rather than a line</summary>
+    /// <summary>Chance of a circle instead of a line</summary>
     public const float CircleChance = 0.45f;
 
-    // Layout, in world units
+    // layout sizes (world units)
     public const float LineSpacing = 34f;
     public const float CircleSpacing = 28f;
     public const float MinCircleRadius = 24f;
 
-    /// <summary>How high above a roof a line of orbs floats: in reach while running</summary>
+    /// <summary>Height of a line of orbs above the roof - low enough to grab while running</summary>
     public const float LineAboveRoof = 30f;
 
     /// <summary>
-    /// How high above a roof the middle of a circle is: the bottom orbs can be run through, the
-    /// top ones need a jump
+    /// Height of a circle's center above the roof. Bottom orbs you can run through, top ones you
+    /// have to jump for
     /// </summary>
     public const float CircleAboveRoof = 75f;
 
-    // Packs in the air float this far above the highest roof around them: in reach of a jump or a swing
+    // floating packs sit this far above the tallest nearby roof so a jump or swing can reach them
     public const float MinAirAboveRoof = 100f;
     public const float MaxAirAboveRoof = 175f;
 
-    /// <summary>The steepest a line of orbs in the air may slope (rise over run)</summary>
+    /// <summary>Max slope for a floating line of orbs</summary>
     public const float MaxAirSlope = 0.35f;
 
-    /// <summary>No orb is placed higher than this (nearer the top of the screen)</summary>
+    /// <summary>Highest an orb can be placed (keeps them on screen)</summary>
     public const float MinOrbY = 40f;
 
-    /// <summary>How close to Spider-Man's body (feet to hands) an orb must come to be collected</summary>
+    /// <summary>Pickup radius around Spider-Man's body (feet to hands)</summary>
     public const float CollectRadius = 24f;
 
-    // Orbs are forgotten once this far behind the left edge of the screen
+    // drop orbs once they're this far off the left side
     private const double DiscardMargin = 200;
 
     private static readonly double MaxPackLength = (MaxPackSize - 1) * LineSpacing;
@@ -83,7 +82,7 @@ public sealed class EssenceField
     private double _nextPackX = FirstPackX;
     private int _packCount;
 
-    // Where the runner was last tick, so a fast swing can't skip over an orb between ticks
+    // last tick's runner position so fast swings don't skip over orbs
     private bool _hasLast;
     private double _lastRunnerX;
     private float _lastFeetY;
@@ -93,18 +92,18 @@ public sealed class EssenceField
         _random = random ?? throw new ArgumentNullException(nameof(random));
     }
 
-    /// <summary>The orbs not yet collected (ahead of the runner, or just behind)</summary>
+    /// <summary>Orbs that haven't been picked up yet</summary>
     public IReadOnlyList<EssenceOrb> Orbs => _orbs;
 
-    /// <summary>How many orbs Spider-Man has collected this run</summary>
+    /// <summary>Orbs collected this run</summary>
     public int CollectedThisRun { get; private set; }
 
-    /// <summary>How many packs have been spawned so far</summary>
+    /// <summary>Number of packs spawned so far</summary>
     public int PackCount => _packCount;
 
     /// <summary>
-    /// Spawns packs ahead of the runner, collects the ones he touches, and forgets the ones
-    /// left behind. Call once per tick, after the runner has moved.
+    /// Spawns new packs, picks up any the runner touches, and cleans up old ones. Call once per
+    /// tick after the runner updates.
     /// </summary>
     public void Update(RooftopTrack track, Runner runner, EventQueue<GameEvent> events, long tick)
     {
@@ -116,7 +115,7 @@ public sealed class EssenceField
 
     private void Generate(RooftopTrack track)
     {
-        // Only lay out a pack once the buildings under all of it exist
+        // wait until the buildings under the whole pack have been generated
         double coveredTo = track.Buildings[^1].EndColumn * (double)RooftopTrack.TileSize;
         while (_nextPackX + MaxPackLength < coveredTo)
             AddPack(track);
@@ -127,7 +126,7 @@ public sealed class EssenceField
         int count = _random.NextInt(MinPackSize, MaxPackSize + 1);
         var shape = _random.Chance(CircleChance) ? EssencePackShape.Circle : EssencePackShape.Line;
 
-        // A tight circle: just big enough that its orbs don't overlap
+        // circle just big enough that the orbs don't overlap
         float radius = MathF.Max(MinCircleRadius, count * CircleSpacing / (2 * MathF.PI));
         double start = _nextPackX;
         double length = shape == EssencePackShape.Line ? (count - 1) * LineSpacing : 2 * radius;
@@ -140,7 +139,7 @@ public sealed class EssenceField
         int pack = _packCount++;
         if (wantsRoof && FlatRoof(track, start - CollectRadius, end + CollectRadius) is float roof)
         {
-            // Sitting on the roof
+            // on the roof
             if (shape == EssencePackShape.Line)
                 AddLine(pack, count, start, roof - LineAboveRoof, 0);
             else
@@ -148,7 +147,7 @@ public sealed class EssenceField
         }
         else
         {
-            // Floating in the air, above the highest roof around it (it may be over a gap)
+            // in the air, above the tallest roof nearby (could be over a gap)
             float highestRoof = HighestRoof(track, start - 200, end);
             float centerY = highestRoof - airAbove;
 
@@ -179,7 +178,7 @@ public sealed class EssenceField
 
     private void AddCircle(int pack, int count, double centerX, float centerY, float radius)
     {
-        // Start at the top and go round
+        // start at the top, go around
         for (int i = 0; i < count; i++)
         {
             float angle = -MathF.PI / 2 + i * 2 * MathF.PI / count;
@@ -188,7 +187,7 @@ public sealed class EssenceField
     }
 
     /// <summary>
-    /// The roof's y position if one flat roof (no gaps, no steps) covers the whole stretch, otherwise null
+    /// Returns the roof y if a single flat roof covers the whole range (no gaps or steps), else null
     /// </summary>
     private static float? FlatRoof(RooftopTrack track, double from, double to)
     {
@@ -205,8 +204,7 @@ public sealed class EssenceField
     }
 
     /// <summary>
-    /// The y position of the highest (smallest y) roof over a stretch, or the lowest possible
-    /// roof if it is all gap
+    /// Y of the tallest roof in a range (smallest y), or the lowest possible roof if it's all gap
     /// </summary>
     private static float HighestRoof(RooftopTrack track, double from, double to)
     {
@@ -230,7 +228,7 @@ public sealed class EssenceField
             _hasLast = true;
         }
 
-        // The box Spider-Man's body (feet to hands) swept through since last tick, plus the reach
+        // box his body swept through since last tick, padded by the pickup radius
         double left = Math.Min(_lastRunnerX, x) - CollectRadius;
         double right = Math.Max(_lastRunnerX, x) + CollectRadius;
         float top = MathF.Min(_lastFeetY, feetY) - Runner.HandHeight - CollectRadius;

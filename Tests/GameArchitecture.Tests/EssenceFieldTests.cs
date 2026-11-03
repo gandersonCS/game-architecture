@@ -11,8 +11,8 @@ public class EssenceFieldTests
     private const float Dt = 1f / 60f;
 
     /// <summary>
-    /// Scrolls a city past a runner who stands still on screen (he isn't updated, so he never
-    /// dies), spawning orbs. Calls <paramref name="observe"/> after every tick.
+    /// Scrolls the city past a runner that never gets updated (so he can't die) and spawns orbs.
+    /// <paramref name="observe"/> gets called after each tick.
     /// </summary>
     private static (RooftopTrack track, EssenceField field, EventQueue<GameEvent> events) Run(
         ulong seed, int ticks, Action<RooftopTrack, EssenceField> observe = null)
@@ -33,7 +33,7 @@ public class EssenceFieldTests
     [Fact]
     public void Packs_HaveThreeToSevenOrbs()
     {
-        // A pack is spawned whole, far ahead of the runner, so the first time it is seen it is complete
+        // packs spawn all at once way ahead of the runner, so the first time we see one it should be full
         var sizes = new Dictionary<int, int>();
         Run(seed: 1, ticks: 6000, (_, field) =>
         {
@@ -113,7 +113,7 @@ public class EssenceFieldTests
     [Fact]
     public void ARestartedRun_StartsWithNoEssence()
     {
-        // Keep jumping, so the run eventually ends, then press jump to restart
+        // keep jumping until the run ends, then press jump to restart
         var session = new GameSession(11);
         var runner = new SessionRunner(session);
         runner.AddPlayer(new PlayerId(1), new DelegateCommandSource(tick =>

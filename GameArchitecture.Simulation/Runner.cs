@@ -5,84 +5,81 @@ namespace GameArchitecture.Simulation;
 
 public enum RunnerState
 {
-    /// <summary>On a roof</summary>
+    /// <summary>On a roof, running</summary>
     Running,
-    /// <summary>Jumping, or falling after running off a roof or letting go of the web</summary>
+    /// <summary>In the air - jumped, ran off a ledge, or let go of a web</summary>
     Airborne,
-    /// <summary>Hanging from a web anchor</summary>
+    /// <summary>Hanging off a web</summary>
     Swinging,
-    /// <summary>The run is over</summary>
+    /// <summary>Game over</summary>
     Dead,
 }
 
 /// <summary>
-/// What the players asked the runner to do this tick (combined from every player's command).
-/// There is only one button: it jumps, and held in the air it swings.
+/// Input for the runner this tick, merged from all players. It's a one-button game: tap to jump,
+/// keep holding in the air to swing.
 /// </summary>
 public readonly record struct RunnerInput(bool JumpPressed, bool JumpDown);
 
 /// <summary>
-/// Spider-Man, as the simulation sees him: where his feet are vertically, and what he is doing.
-/// Horizontally he never moves: the <see cref="RooftopTrack"/> scrolls past him.
+/// Spider-Man in the simulation. We only track him vertically (feet height + state) since he
+/// never actually moves sideways - the <see cref="RooftopTrack"/> scrolls under him instead.
 /// </summary>
 /// <remarks>
 /// <para>
-/// One button does everything. Press it on a roof to jump: the longer you hold it, the higher
-/// you go (letting go early cuts the jump short). A brief grace period after running off an
-/// edge, and a brief memory of a press just before landing, keep it feeling fair.
+/// Controls: press on a roof to jump, hold for a higher jump, release early for a short hop.
+/// I added coyote time and a jump buffer so edge jumps don't feel unfair.
 /// </para>
 /// <para>
-/// Keep holding it in the air, once you start to fall, and Spider-Man shoots a web at a point in
-/// the sky just ahead of him and swings from it. There are no fixed anchors: he can swing from
-/// anywhere.
+/// Holding the button once he starts falling shoots a web at a spot up and ahead of him and he
+/// swings from it. No fixed anchor points, you can swing from anywhere.
 /// </para>
 /// <para>
-/// The swing is a real pendulum, and it keeps his momentum: he enters with the speed he already
-/// had, speeds up as he swoops through the bottom of the arc, and leaves with that speed (the
-/// city then settles back to cruising speed gradually). Since he stands still on screen, his
-/// swing is what moves the city: the track is scrolled to wherever the pendulum puts him. The
-/// rope is longer the faster he goes, so a swing takes about the same time at any speed. Let go,
-/// or swing as far round as where he started, and he drops. Pressing again in the air swings
-/// again. Hit the side of a building, or fall into a gap, and the run ends.
+/// The swing is an actual pendulum sim. He keeps whatever speed he came in with, picks up speed
+/// at the bottom, and keeps it when he lets go (the city slows back down to cruising speed over
+/// time). Because he's fixed on screen, the swing moves the track instead of him. Rope length
+/// scales with speed so swings take roughly the same time no matter how fast you're going.
+/// Releasing, or swinging up to the same angle you started at, drops you. Hitting a wall or
+/// falling in a gap ends the run.
 /// </para>
 /// </remarks>
 public sealed class Runner
 {
-    // Tuning, in world units and seconds
+    // tuning values (world units / seconds)
     public const float Gravity = 1900f;
     public const float JumpSpeed = 720f;
-    /// <summary>Letting go of jump early keeps only this much of the upward speed</summary>
+    /// <summary>How much upward speed you keep if you let go of jump early</summary>
     public const float JumpCut = 0.45f;
-    /// <summary>How far below his hands his feet hang while swinging</summary>
+    /// <summary>Distance from hands down to feet while hanging on the web</summary>
     public const float HandHeight = 60f;
-    /// <summary>How far below a roof's surface the runner may be and still get up onto it</summary>
+    /// <summary>How far below a roof he can be and still step up onto it instead of hitting the wall</summary>
     public const float StepTolerance = 28f;
     public const float CoyoteSeconds = 0.09f;
     public const float JumpBufferSeconds = 0.10f;
-    // The web sticks to a point ahead of and above his hands. How far ahead is however far he'd
-    // travel in this many seconds, so a swing lasts about the same time at any speed.
-    // Raise WebAheadSeconds for wider, longer swings; the rope is WebAboveRatio times as high as it is far.
+    // web anchor goes up and ahead of his hands. "ahead" = how far he'd travel in WebAheadSeconds,
+    // which keeps swing timing about the same at any speed. bump WebAheadSeconds up for bigger swings.
+    // WebAboveRatio = how much higher the anchor is than it is far ahead
     public const float WebAheadSeconds = 0.4f;
     public const float WebAboveRatio = 1.4f;
     public const float MinWebAhead = 120f;
 
     /// <summary>
-    /// Gravity while swinging. Higher means a snappier, faster pendulum with a bigger rush of
-    /// speed at the bottom of the arc.
+    /// Gravity used during the swing. Turning it up makes the pendulum snappier and gives more of a
+    /// speed boost at the bottom.
     /// </summary>
     public const float SwingGravity = 1500f;
 
-    /// <summary>A small push along the swing while he moves forward, so swings build speed</summary>
+    /// <summary>Small forward push during the swing so you gain speed over multiple swings</summary>
     public const float SwingDrive = 150f;
 
-    /// <summary>How much faster than he was going he may be flung into a swing, at the most</summary>
+    /// <summary>Cap on how much faster than your current speed a swing can launch you</summary>
     public const float MaxEntryBoost = 1.5f;
 
-    /// <summary>Letting go of the web keeps only this much of any upward speed, so he doesn't fly high</summary>
+    /// <summary>Fraction of upward speed kept on release, otherwise he rockets off the top of the screen</summary>
     public const float ReleaseUpFraction = 0.4f;
     public const float RestartDelaySeconds = 0.8f;
 
-    // Where on his body roofs are checked for: a little behind and a little in front of his middle
+    // spots on his body we check for roofs - slightly behind and slightly in front of center
     private const float FootBack = 10f;
     private const float FootFront = 20f;
 
@@ -95,13 +92,13 @@ public sealed class Runner
     private bool _webLocked;
     private float _deadSeconds;
 
-    // The pendulum: the rope's angle from straight down (negative: he's behind the anchor)
-    // and how fast it is changing
+    // pendulum state. theta = rope angle from straight down (negative means he's behind the anchor),
+    // omega = how fast it's changing
     private float _theta;
     private float _omega;
     private float _endTheta;
 
-    /// <param name="track">The track he starts on (he stands on its first roof)</param>
+    /// <param name="track">Track to start on - he spawns on the first roof</param>
     public Runner(RooftopTrack track)
     {
         FeetY = track.GroundYAt(track.RunnerTrackX);
@@ -109,30 +106,30 @@ public sealed class Runner
 
     public RunnerState State { get; private set; } = RunnerState.Running;
 
-    /// <summary>The y position of his feet</summary>
+    /// <summary>Y of his feet</summary>
     public float FeetY { get; private set; }
 
-    /// <summary>Vertical speed, in world units per second (negative is up)</summary>
+    /// <summary>Vertical speed in units/sec, negative = up</summary>
     public float VelocityY { get; private set; }
 
-    /// <summary>Seconds since he left the ground (for animation)</summary>
+    /// <summary>Time since he left the ground, used by the animations</summary>
     public float AirSeconds { get; private set; }
 
-    /// <summary>The anchor he is swinging from, if any</summary>
+    /// <summary>Current web anchor, null if not swinging</summary>
     public WebAnchor? Anchor { get; private set; }
 
     public float RopeLength { get; private set; }
 
-    /// <summary>Seconds since he shot his web (for drawing the web flying out)</summary>
+    /// <summary>Time since the web was shot, so the view can animate it flying out</summary>
     public float SwingSeconds { get; private set; }
 
-    /// <summary>The y position of his hands, where the web leaves him</summary>
+    /// <summary>Y of his hands (where the web comes out)</summary>
     public float HandY => FeetY - HandHeight;
 
     public RunEndReason? EndReason { get; private set; }
 
     /// <summary>
-    /// The angle of the rope from straight up, in degrees. Positive when the anchor is ahead.
+    /// Rope angle from straight up in degrees. Positive if the anchor is in front of him.
     /// </summary>
     public float RopeAngleDegrees(RooftopTrack track)
     {
@@ -143,7 +140,7 @@ public sealed class Runner
     }
 
     /// <summary>
-    /// Advances the runner by one tick. Returns true if the players asked to start a new run.
+    /// Steps the runner forward one tick. Returns true when the player wants to restart.
     /// </summary>
     public bool Update(in RunnerInput input, RooftopTrack track, float dt, EventQueue<GameEvent> events, long tick)
     {
@@ -156,7 +153,7 @@ public sealed class Runner
 
         if (State == RunnerState.Dead)
         {
-            // Tumble down off the screen, then wait for the players to ask for another go
+            // fall off screen, then wait for a button press to restart
             _deadSeconds += dt;
             VelocityY += Gravity * dt;
             FeetY += VelocityY * dt;
@@ -183,7 +180,7 @@ public sealed class Runner
         float? roof = RoofUnderFoot(track);
         if (roof is null)
         {
-            // Ran off the edge. There's a moment to jump anyway.
+            // ran off the edge - still give them a few frames to jump (coyote time)
             State = RunnerState.Airborne;
             VelocityY = 0;
             AirSeconds = 0;
@@ -193,7 +190,7 @@ public sealed class Runner
             return;
         }
 
-        // Hop up (or step down) to the roof, rather than snapping
+        // ease up/down to the roof height instead of snapping
         float ease = 1f - MathF.Exp(-18f * dt);
         FeetY += (roof.Value - FeetY) * ease;
 
@@ -214,7 +211,7 @@ public sealed class Runner
                 Jump();
         }
 
-        // Letting go of jump early makes a shorter hop
+        // short hop if they let go early
         if (_jumpHeld && !input.JumpDown && AirSeconds > 0.06f)
         {
             _jumpHeld = false;
@@ -222,8 +219,7 @@ public sealed class Runner
                 VelocityY *= JumpCut;
         }
 
-        // Still holding the button once he starts to fall (or pressing it again in the air):
-        // shoot a web and swing
+        // still holding when he starts falling (or pressed again mid-air) -> web swing
         if (input.JumpDown && !_webLocked && VelocityY >= 0)
         {
             AttachWeb(track);
@@ -247,8 +243,8 @@ public sealed class Runner
             return;
         }
 
-        // The pendulum: gravity swings the rope back toward hanging straight down, and a little
-        // push keeps him building speed while he's moving forward. Small steps keep it accurate.
+        // pendulum update: gravity pulls him back toward hanging straight down, plus a small push
+        // while moving forward. split into substeps so it doesn't drift
         const int steps = 4;
         float h = dt / steps;
         for (int i = 0; i < steps; i++)
@@ -260,7 +256,7 @@ public sealed class Runner
             _theta += _omega * h;
         }
 
-        // Where the pendulum puts him, and how fast he is moving
+        // get his position/velocity from the pendulum
         float sin = MathF.Sin(_theta), cos = MathF.Cos(_theta);
         double handX = anchor.X + RopeLength * sin;
         float handY = anchor.Y + RopeLength * cos;
@@ -268,14 +264,14 @@ public sealed class Runner
         VelocityY = -RopeLength * _omega * sin;
         FeetY = handY + HandHeight;
 
-        // He stays put on screen, so move the whole city to where the swing puts him
+        // he doesn't move on screen, so scroll the city to match the swing
         track.DriveScroll(handX - RooftopTrack.RunnerX, speedX);
 
         Resolve(track);
         if (State != RunnerState.Swinging)
             return;
 
-        // The swing is over when he's round to where he started (on the far side), or has stalled
+        // done once he's swung round to the mirror of his starting angle, or he's basically stopped
         if (_theta >= _endTheta || _omega <= 0.05f)
             ReleaseWeb(track);
     }
@@ -295,19 +291,19 @@ public sealed class Runner
     {
         float speedX = track.Speed;
 
-        // The web sticks to a point ahead of him and above his hands
+        // stick the web up and ahead of him
         float ahead = MathF.Max(MinWebAhead, speedX * WebAheadSeconds);
         float above = ahead * WebAboveRatio;
         Anchor = new WebAnchor(track.RunnerTrackX + ahead, HandY - above);
         RopeLength = MathF.Sqrt(ahead * ahead + above * above);
 
-        // He's behind the anchor, so the rope's angle starts negative, and he swings round to the
-        // same angle on the other side
+        // he starts behind the anchor so theta is negative, and the swing ends at the same angle
+        // on the other side
         _theta = MathF.Atan2(-ahead, above);
         _endTheta = -_theta;
 
-        // The web redirects the speed he already has along the arc, without losing any forward
-        // speed (that's what makes it feel smooth rather than like hitting a rope)
+        // turn his current speed into swing speed without losing forward momentum. without this
+        // it feels like slamming into a rope
         float cos = MathF.Cos(_theta);
         float speed = MathF.Sqrt(speedX * speedX + VelocityY * VelocityY);
         float tangentSpeed = MathF.Min(MathF.Max(speed, speedX / cos), MaxEntryBoost * speedX / cos);
@@ -325,16 +321,16 @@ public sealed class Runner
     {
         State = RunnerState.Airborne;
         Anchor = null;
-        track.ScrollDrivenByRunner = false;     // the city keeps the speed the swing gave it
+        track.ScrollDrivenByRunner = false;     // city keeps the swing's speed
         _canCoyote = false;
-        _webLocked = true;       // Let go of the button, then press it again, to swing again
+        _webLocked = true;       // have to release and press again to swing again
         if (VelocityY < 0)
             VelocityY *= ReleaseUpFraction;
         _events.Raise(new WebReleased(_tick));
     }
 
     /// <summary>
-    /// The higher of the roofs just behind and just in front of his feet (null over a gap)
+    /// Whichever roof is higher between the spot behind his feet and the spot in front. Null if both are gaps.
     /// </summary>
     private float? RoofUnderFoot(RooftopTrack track)
     {
@@ -347,7 +343,7 @@ public sealed class Runner
     }
 
     /// <summary>
-    /// Lands on a roof, or crashes into the side of one, or falls out of the world
+    /// Handles landing on a roof, crashing into a wall, or falling off the bottom
     /// </summary>
     private void Resolve(RooftopTrack track)
     {
@@ -380,7 +376,7 @@ public sealed class Runner
         AirSeconds = 0;
         Anchor = null;
         track.ScrollDrivenByRunner = false;
-        _webLocked = true;       // Landing with the button still held doesn't swing; let go first
+        _webLocked = true;       // don't auto-swing if they land still holding the button
         _events.Raise(new RunnerLanded(_tick, fallSpeed));
     }
 
@@ -393,7 +389,7 @@ public sealed class Runner
         _deadSeconds = 0;
         track.IsScrolling = false;
         if (reason == RunEndReason.HitWall)
-            VelocityY = -250f;       // bounce off the wall
+            VelocityY = -250f;       // little bounce off the wall
         _events.Raise(new RunEnded(_tick, track.DistanceMeters, reason));
     }
 }

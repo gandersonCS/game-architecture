@@ -69,7 +69,7 @@ public class GameArchitectureExampleGame : Game
         Services.AddService(_settings.Controls);
         Services.AddService(new PausePolicy());      // Change its settings to change who can pause, etc.
 
-        // The player's progress (high score, last score, Spider-Essence), kept next to the settings
+        // save data (high score, last score, essence), stored next to the settings file
         _save = new SaveFile(_settings.Store);
 #if DEBUG
         Console.WriteLine($"[Save] {_settings.Store.PathOf(SaveFile.FileName)}");
